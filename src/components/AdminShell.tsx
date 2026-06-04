@@ -6,7 +6,7 @@ import { signOut } from "@/lib/auth/actions";
 import {
   LayoutDashboard, Inbox, UserCheck, ShieldCheck, Wallet, RotateCcw,
   AlertTriangle, Users, Package, MapPin, Receipt, Bell, UserCog, MessageSquare, HardDriveDownload,
-LogOut, Menu, X,
+LogOut, Menu, X, BookOpen,
 } from "lucide-react";
 
 const NAV = [
@@ -23,6 +23,7 @@ const NAV = [
   { href: "/admin/ledger", label: "Ledger", icon: Receipt },
   { href: "/admin/fx", label: "FX Rate", icon: Receipt },
   { href: "/admin/chats", label: "Support Chats", icon: MessageSquare },
+  { href: "/admin/knowledge", label: "Knowledge Base", icon: BookOpen },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/templates", label: "Templates", icon: Bell },
   { href: "/admin/users", label: "Users", icon: UserCog },
