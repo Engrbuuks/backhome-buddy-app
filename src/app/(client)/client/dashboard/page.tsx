@@ -7,7 +7,7 @@ export default async function ClientDashboard() {
   const requests = await listMyRequests();
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
         <div>
           <h1 className="font-display text-2xl font-extrabold">My Requests</h1>
           <p className="mt-1 text-sm text-bbb-slate">Track everything you&apos;ve asked us to handle.</p>

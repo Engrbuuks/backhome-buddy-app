@@ -6,7 +6,7 @@ import { signOut } from "@/lib/auth/actions";
 import {
   LayoutDashboard, Inbox, UserCheck, ShieldCheck, Wallet, RotateCcw,
   AlertTriangle, Users, Package, MapPin, Receipt, Bell, UserCog, MessageSquare, HardDriveDownload,
-LogOut,
+LogOut, Menu, X,
 } from "lucide-react";
 
 const NAV = [
@@ -31,6 +31,7 @@ const NAV = [
 
 export function AdminShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = usePathname();
+  const [navOpen, setNavOpen] = React.useState(false);
   return (
     <div className="min-h-screen bg-bbb-bg">
       <div className="mx-auto flex max-w-[1280px] gap-6 p-4">
@@ -73,8 +74,24 @@ export function AdminShell({ title, children }: { title: string; children: React
                   <LogOut className="h-4 w-4" />
                 </button>
               </form>
+              <button aria-label="Menu" onClick={() => setNavOpen((v) => !v)} className="grid h-8 w-8 place-items-center rounded-full border border-bbb-border text-bbb-charcoal">
+                {navOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+              </button>
             </div>
           </div>
+          {navOpen && (
+            <nav className="mb-4 grid grid-cols-2 gap-1 rounded-2xl border border-bbb-border bg-white p-2 shadow-soft lg:hidden">
+              {NAV.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link key={href} href={href} onClick={() => setNavOpen(false)}
+                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${active ? "bg-bbb-strong text-white" : "text-bbb-slate hover:bg-bbb-bg"}`}>
+                    <Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
           <h1 className="sr-only">{title}</h1>
           {children}
         </main>
@@ -87,7 +104,7 @@ export function PageHeader({ eyebrow, title, description, actionLabel, onAction 
   eyebrow?: string; title: string; description?: string; actionLabel?: string; onAction?: () => void;
 }) {
   return (
-    <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div className="mb-5 flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:items-end sm:text-left">
       <div>
         {eyebrow && <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-strong">{eyebrow}</p>}
         <h2 className="mt-1 font-display text-2xl font-extrabold tracking-[-0.03em] text-bbb-charcoal">{title}</h2>

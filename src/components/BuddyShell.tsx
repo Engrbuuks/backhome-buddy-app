@@ -28,7 +28,7 @@ export function BuddyShell({ children, unreadCount = 0 }: { children: React.Reac
             <button className="flex items-center gap-2 rounded-xl border border-bbb-border px-3 py-2 text-xs font-bold text-bbb-slate hover:text-red-600"><LogOut className="h-3.5 w-3.5" />Logout</button>
           </form>
         </div>
-        <nav className="mx-auto flex max-w-container gap-1 px-4">
+        <nav className="mx-auto flex max-w-container gap-1 px-4 overflow-x-auto whitespace-nowrap">
           {TABS.map((t) => {
             const active = pathname?.startsWith(t.href);
             return (

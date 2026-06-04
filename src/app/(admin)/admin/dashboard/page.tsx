@@ -22,7 +22,7 @@ export default async function AdminDashboard() {
   return (
     <AdminShell title="Dashboard">
       <PageHeader eyebrow="Operations" title="Dashboard" description="Live overview of every request in the system." />
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-2xl border border-bbb-border bg-white p-5 shadow-soft">
             <p className="text-xs font-bold uppercase tracking-wide text-bbb-slate">{k.label}</p>
@@ -30,7 +30,7 @@ export default async function AdminDashboard() {
           </div>
         ))}
       </div>
-      <h2 className="mb-3 font-display text-lg font-extrabold">Recent requests</h2>
+      <h2 className="mb-3 text-center font-display text-lg font-extrabold sm:text-left">Recent requests</h2>
       {all.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-bbb-border bg-white p-8 text-center text-sm text-bbb-slate">No requests yet.</div>
       ) : (
