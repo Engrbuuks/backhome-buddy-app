@@ -7,6 +7,7 @@ import { signOut } from "@/lib/auth/actions";
 
 const TABS = [
   { label: "My Tasks", href: "/buddy/dashboard" },
+  { label: "Verification", href: "/buddy/vetting" },
   { label: "Earnings", href: "/buddy/earnings" },
   { label: "Payout Details", href: "/buddy/settings" },
   { label: "Profile", href: "/buddy/profile" },
