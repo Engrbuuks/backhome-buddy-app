@@ -77,7 +77,7 @@ export async function getRequestForAdmin(id: string) {
   const db = createAdminClient();
   const { data } = await db
     .from("requests")
-    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), quote_items(id, label, amount_ngn), proofs(id, kind, note, created_at), profiles!requests_client_id_fkey(full_name, email)")
+    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), regions(name, zone), quote_items(id, label, amount_ngn), proofs(id, kind, note, created_at), profiles!requests_client_id_fkey(full_name, email)")
     .eq("id", id)
     .single();
   return data;

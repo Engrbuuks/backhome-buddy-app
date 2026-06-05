@@ -39,27 +39,48 @@ export async function saveServiceType(input: {
   name: string;
   base_price_ngn: number;
   default_buddy_payout_pct: number;
+  pricing_mode?: string;
+  from_price_usd?: number;
   active?: boolean;
 }) {
   await assertAdmin();
   const db = createAdminClient();
+  const row = {
+    name: input.name,
+    base_price_ngn: input.base_price_ngn,
+    default_buddy_payout_pct: input.default_buddy_payout_pct,
+    pricing_mode: input.pricing_mode === "from" ? "from" : "quote",
+    from_price_usd: Number(input.from_price_usd ?? 0),
+    active: input.active ?? true,
+  };
   if (input.id) {
-    const { error } = await db.from("service_types").update({
-      name: input.name,
-      base_price_ngn: input.base_price_ngn,
-      default_buddy_payout_pct: input.default_buddy_payout_pct,
-      active: input.active ?? true,
-    }).eq("id", input.id);
+    const { error } = await db.from("service_types").update(row).eq("id", input.id);
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await db.from("service_types").insert({
-      name: input.name,
-      base_price_ngn: input.base_price_ngn,
-      default_buddy_payout_pct: input.default_buddy_payout_pct,
-      active: input.active ?? true,
-    });
+    const { error } = await db.from("service_types").insert(row);
     if (error) throw new Error(error.message);
   }
+  revalidatePath("/admin/services");
+}
+
+// ---------- ZONE-B UPLIFT (global pricing setting) ----------
+export async function getZoneUpliftPct(): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "pricing_zone_b_uplift_pct").maybeSingle();
+  const pct = Number((data?.value as any)?.pct);
+  return Number.isFinite(pct) && pct >= 0 ? pct : 25;
+}
+
+export async function saveZoneUpliftPct(pct: number) {
+  await assertAdmin();
+  if (!Number.isFinite(pct) || pct < 0 || pct > 200) throw new Error("Uplift must be between 0 and 200%.");
+  const db = createAdminClient();
+  const { error } = await db.from("app_settings").upsert({
+    key: "pricing_zone_b_uplift_pct",
+    value: { pct },
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
   revalidatePath("/admin/services");
 }
 
@@ -80,17 +101,18 @@ export async function listRegions() {
   return data ?? [];
 }
 
-export async function saveRegion(input: { id?: string; name: string; state?: string; active?: boolean }) {
+export async function saveRegion(input: { id?: string; name: string; state?: string; zone?: string; active?: boolean }) {
   await assertAdmin();
   const db = createAdminClient();
+  const zone = input.zone === "A" ? "A" : "B";
   if (input.id) {
     const { error } = await db.from("regions").update({
-      name: input.name, state: input.state ?? null, active: input.active ?? true,
+      name: input.name, state: input.state ?? null, zone, active: input.active ?? true,
     }).eq("id", input.id);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await db.from("regions").insert({
-      name: input.name, state: input.state ?? null, active: input.active ?? true,
+      name: input.name, state: input.state ?? null, zone, active: input.active ?? true,
     });
     if (error) throw new Error(error.message);
   }

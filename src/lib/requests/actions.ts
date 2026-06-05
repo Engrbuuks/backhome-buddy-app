@@ -14,11 +14,17 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 // Active service types + regions for the client's New Request form dropdowns.
 export async function getRequestFormOptions() {
   const supabase = createClient();
-  const [{ data: services }, { data: regions }] = await Promise.all([
-    supabase.from("service_types").select("id, name, base_price_ngn").eq("active", true).order("sort_order"),
-    supabase.from("regions").select("id, name, state").eq("active", true).order("name"),
+  const [{ data: services }, { data: regions }, { data: upliftRow }] = await Promise.all([
+    supabase.from("service_types").select("id, name, base_price_ngn, pricing_mode, from_price_usd").eq("active", true).order("sort_order"),
+    supabase.from("regions").select("id, name, state, zone").eq("active", true).order("name"),
+    supabase.from("app_settings").select("value").eq("key", "pricing_zone_b_uplift_pct").maybeSingle(),
   ]);
-  return { services: services ?? [], regions: regions ?? [] };
+  const pct = Number((upliftRow?.value as any)?.pct);
+  return {
+    services: services ?? [],
+    regions: regions ?? [],
+    zoneBUpliftPct: Number.isFinite(pct) && pct >= 0 ? pct : 25,
+  };
 }
 
 // Client creates a request. RLS "client creates own request" enforces client_id = self.
@@ -32,10 +38,16 @@ export async function createRequest(_prev: unknown, formData: FormData) {
   const title = String(formData.get("title") || "").trim().slice(0, 140);
   if (!title) return { error: "Please give your request a short title." };
 
+  const regionRaw = String(formData.get("region_id") || "");
+  const isOtherState = regionRaw === "__other__";
+  const requestedState = isOtherState ? String(formData.get("requested_state") || "").slice(0, 80).trim() : null;
+  if (isOtherState && !requestedState) return { error: "Tell us which state the task is in." };
+
   const { error } = await supabase.from("requests").insert({
     client_id: profile.id,
     service_type_id: (formData.get("service_type_id") as string) || null,
-    region_id: (formData.get("region_id") as string) || null,
+    region_id: isOtherState ? null : regionRaw || null,
+    requested_state: requestedState,
     status: "submitted",
     title,
     description: String(formData.get("description") || "").slice(0, 4000),

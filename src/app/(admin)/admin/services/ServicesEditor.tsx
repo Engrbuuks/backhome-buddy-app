@@ -5,13 +5,15 @@ import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { Field } from "@/components/FormControls";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
-import { saveServiceType, deleteServiceType } from "@/lib/admin/config-actions";
+import { saveServiceType, deleteServiceType, saveZoneUpliftPct } from "@/lib/admin/config-actions";
 import type { ServiceType } from "@/types/db";
 
 type Row = Partial<ServiceType> & { _new?: boolean };
 
-export default function ServicesEditor({ initial }: { initial: ServiceType[] }) {
+export default function ServicesEditor({ initial, upliftPct }: { initial: ServiceType[]; upliftPct: number }) {
   const [rows, setRows] = useState<Row[]>(initial);
+  const [uplift, setUplift] = useState(String(upliftPct));
+  const [upliftSaved, setUpliftSaved] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -32,6 +34,8 @@ export default function ServicesEditor({ initial }: { initial: ServiceType[] }) 
           name: row.name!,
           base_price_ngn: Number(row.base_price_ngn ?? 0),
           default_buddy_payout_pct: Number(row.default_buddy_payout_pct ?? 60),
+          pricing_mode: (row as any).pricing_mode === "from" ? "from" : "quote",
+          from_price_usd: Number((row as any).from_price_usd ?? 0),
           active: row.active ?? true,
         });
         // mark as saved (clear _new) — server revalidate will refresh on next load
@@ -60,18 +64,36 @@ export default function ServicesEditor({ initial }: { initial: ServiceType[] }) 
         onAction={addRow}
       />
       {error && <div className="mb-4"><ErrorState title="Could not save" message={error} /></div>}
+
+      <div className="mb-5 flex flex-wrap items-end gap-3 rounded-3xl border border-bbb-border bg-white p-4 shadow-soft">
+        <div className="min-w-[200px]">
+          <p className="font-display text-base font-extrabold">Zone B uplift</p>
+          <p className="text-xs text-bbb-slate">Published &quot;from&quot; prices are for Zone A states (Lagos, Abuja). Zone B states show the from-price + this percentage. Zones are set per state under Areas.</p>
+        </div>
+        <Field label="Uplift %" type="number" value={uplift} onChange={(e) => { setUplift(e.target.value); setUpliftSaved(false); }} className="w-28" />
+        <button disabled={pending} onClick={() => startTransition(async () => { try { await saveZoneUpliftPct(Number(uplift)); setUpliftSaved(true); } catch (e) { setError(e instanceof Error ? e.message : "Save failed."); } })} className="h-11 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save uplift</button>
+        {upliftSaved && <span className="text-sm font-semibold text-green-700">Saved ✓</span>}
+      </div>
       {rows.length === 0 ? (
         <EmptyState title="No services yet" description="Add your first service type to get started." actionLabel="Add service" onAction={addRow} />
       ) : (
         <div className="space-y-3">
           {rows.map((service, idx) => (
-            <article key={service.id ?? `new-${idx}`} className="grid gap-3 rounded-3xl border border-bbb-border bg-white p-4 shadow-soft md:grid-cols-[1fr_150px_120px_120px_auto] md:items-end">
+            <article key={service.id ?? `new-${idx}`} className="grid gap-3 rounded-3xl border border-bbb-border bg-white p-4 shadow-soft md:grid-cols-[1.2fr_130px_100px_150px_130px_1fr_auto] md:items-end">
               <Field label="Service name" value={service.name ?? ""} onChange={(e) => update(idx, "name", e.target.value)} />
               <Field label="Base price (₦)" type="number" value={String(service.base_price_ngn ?? 0)} onChange={(e) => update(idx, "base_price_ngn", Number(e.target.value))} />
               <Field label="Payout %" type="number" value={String(service.default_buddy_payout_pct ?? 60)} onChange={(e) => update(idx, "default_buddy_payout_pct", Number(e.target.value))} />
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Pricing mode</span>
+                <select value={(service as any).pricing_mode ?? "quote"} onChange={(e) => update(idx, "pricing_mode" as any, e.target.value)} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong">
+                  <option value="quote">Quote only</option>
+                  <option value="from">From price</option>
+                </select>
+              </label>
+              <Field label="From $ (Zone A)" type="number" value={String((service as any).from_price_usd ?? 0)} onChange={(e) => update(idx, "from_price_usd" as any, Number(e.target.value))} />
               <div>
-                <p className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Preview</p>
-                <p className="rounded-xl bg-bbb-bg px-3 py-2.5 text-sm font-bold">{formatNGN(Number(service.base_price_ngn || 0))}</p>
+                <p className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Client sees</p>
+                <p className="rounded-xl bg-bbb-bg px-3 py-2.5 text-xs font-bold leading-5">{(service as any).pricing_mode === "from" && Number((service as any).from_price_usd) > 0 ? `from $${Number((service as any).from_price_usd)} (A) · $${Math.round(Number((service as any).from_price_usd) * (1 + Number(uplift || 0) / 100))} (B)` : "Priced per task — free quote in 24h"}</p>
               </div>
               <div className="flex gap-2">
                 <button disabled={pending} onClick={() => save(idx)} className="h-11 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save</button>

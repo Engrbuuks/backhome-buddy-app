@@ -12,7 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const KNOWLEDGE_SETTING_KEY = "support_knowledge_base";
 
 export const DEFAULT_KNOWLEDGE = `ABOUT BACKHOME BUDDY
-Backhome Buddy (backhomebuddy.ng) is a trusted local representation / concierge service that helps Nigerians in the diaspora, international residents, families, and businesses get important tasks done on the ground in Nigeria — with verified proof of completion. Operations are based in Lagos, Nigeria, with field support across major Nigerian cities and all 36 states. Clients can request and manage tasks from anywhere in the world. Mission: solving distance with trust. Track record: 2,500+ tasks completed, 500+ diaspora clients, 36 states covered, 98% client satisfaction.
+Backhome Buddy (backhomebuddy.ng) is a trusted local representation / concierge service that helps Nigerians in the diaspora, international residents, families, and businesses get important tasks done on the ground in Nigeria — with verified proof of completion. Operations are based in Lagos, Nigeria, with field support across major Nigerian cities and all 36 states. Clients can request and manage tasks from anywhere in the world. Mission: solving distance with trust. Track record: 2,500+ tasks completed, 500+ diaspora clients, operating across 12 states and expanding, 98% client satisfaction.
 
 SERVICES (8)
 1. Family Welfare Check — visit parents/loved ones, welfare assessment, photos & videos, written report, follow-up support. Can be scheduled as a recurring task (e.g. monthly).
@@ -35,13 +35,13 @@ PROOF & TRUST
 Every task ends with verifiable evidence: timestamped photos, videos, GPS-tagged location verification, detailed written reports, and receipts/documents. Every buddy goes through strict vetting: application screening + background checks, identity/address/reference verification, training (service standards, ethics, safety), location- and skill-based deployment, and ongoing quality reviews.
 
 PRICING & PAYMENT
-Quotes are free. Prices come only from official quotes after the team clarifies the request — there is no public price list, and the assistant must never invent or estimate a price. Quotes are given in US dollars. Payment is made securely before work begins. No hidden charges: service fees, expected expenses, and third-party costs are explained upfront. Refunds: clients can cancel before work starts (refund if already paid). If something goes wrong, the client can raise a dispute; the team reviews evidence and communication and resolves it fairly, including refunds where appropriate.
+Quotes are free and given in US dollars. Some standard services display a published "from" price in the app; the starting price depends on the state (major metros like Lagos and Abuja are the base; other covered states carry a small location uplift shown automatically when the client selects their state). Other services (e.g. property verification, corporate representation, custom requests) are priced per task with a free, detailed quote within 24 hours. The assistant must NEVER state a specific price or number itself — prices are shown in the app when the client selects a service and state, and the final figure always comes from the official quote, confirmed BEFORE any payment. No hidden charges: service fees, expected expenses, and third-party costs are explained upfront. Refunds: clients can cancel before work starts (refund if already paid). If something goes wrong, the client can raise a dispute; the team reviews evidence and communication and resolves it fairly, including refunds where appropriate.
 
 TIMELINES
 Timelines depend on the type of task, location, agency response, and required documentation. The team provides an estimated timeline before work begins — never promise a specific turnaround.
 
 COVERAGE
-All 36 Nigerian states, fastest turnaround in major cities and their surrounding areas. Smaller towns: often possible depending on access, safety, and availability of a vetted buddy — each request is reviewed individually. Field execution is Nigeria-only; clients can be anywhere in the world.
+Currently live in 12 states: Lagos, Abuja (FCT), Ogun, Oyo, Osun, Ekiti, Edo, Delta, Enugu, Anambra, Imo, and Abia — expanding nationwide state by state. Tasks in other states: the client can still submit a request choosing "Another state"; the team reviews and quotes if it can be reached safely with a vetted buddy. Smaller towns within covered states: often possible depending on access and safety — reviewed individually. Field execution is Nigeria-only; clients can be anywhere in the world.
 
 PRIVACY
 Tasks and personal information are handled confidentially; only what is necessary to complete the task is shared.

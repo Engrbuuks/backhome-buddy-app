@@ -43,6 +43,14 @@ export default function QuoteBuilder({ request }: { request: any }) {
         <StatusPill status={request.status} />
         {request.urgency === "urgent" && <StatusPill status="Pending" />}
       </div>
+      {(request.regions?.name || request.requested_state) && (
+        <div className="mb-4 rounded-2xl border border-bbb-border bg-white p-3 text-sm shadow-soft">
+          <span className="font-semibold">Location: </span>
+          {request.regions?.name
+            ? <>{request.regions.name} <span className="text-bbb-slate">(Zone {request.regions.zone ?? "B"})</span></>
+            : <span className="font-bold text-amber-700">Out of coverage — {request.requested_state} (expansion lead: quote only if we can reach it safely)</span>}
+        </div>
+      )}
       {request.description && (
         <div className="mb-5 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <p className="text-sm leading-7 text-bbb-slate">{request.description}</p>
