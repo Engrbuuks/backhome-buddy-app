@@ -10,7 +10,7 @@ import { sendQuote } from "@/lib/admin/quote-actions";
 
 interface Item { label: string; amount_ngn: number }
 
-export default function QuoteBuilder({ request }: { request: any }) {
+export default function QuoteBuilder({ request, actionSlot, expectations }: { request: any; actionSlot?: React.ReactNode; expectations?: string | null }) {
   const existing: Item[] = (request.quote_items ?? []).map((q: any) => ({ label: q.label, amount_ngn: Number(q.amount_ngn) }));
   const [items, setItems] = useState<Item[]>(existing.length ? existing : [{ label: request.service_types?.name ?? "Service", amount_ngn: Number(request.service_types?.base_price_ngn ?? 0) }]);
   const [payout, setPayout] = useState<number>(Number(request.buddy_payout_ngn ?? 0));
@@ -43,6 +43,13 @@ export default function QuoteBuilder({ request }: { request: any }) {
         <StatusPill status={request.status} />
         {request.urgency === "urgent" && <StatusPill status="Pending" />}
       </div>
+      {actionSlot}
+      {expectations && (
+        <div className="mb-4 rounded-2xl border border-bbb-border bg-bbb-soft p-4 shadow-soft">
+          <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-dark">Client&apos;s checklist (context for the quote — the quote remains the agreed scope)</p>
+          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-bbb-charcoal">{expectations}</p>
+        </div>
+      )}
       {(request.regions?.name || request.requested_state) && (
         <div className="mb-4 rounded-2xl border border-bbb-border bg-white p-3 text-sm shadow-soft">
           <span className="font-semibold">Location: </span>

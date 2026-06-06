@@ -48,6 +48,7 @@ export async function createRequest(_prev: unknown, formData: FormData) {
     service_type_id: (formData.get("service_type_id") as string) || null,
     region_id: isOtherState ? null : regionRaw || null,
     requested_state: requestedState,
+    expectations: String(formData.get("expectations") || "").slice(0, 2000).trim() || null,
     status: "submitted",
     title,
     description: String(formData.get("description") || "").slice(0, 4000),

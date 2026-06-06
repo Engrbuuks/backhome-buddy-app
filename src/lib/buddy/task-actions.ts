@@ -62,7 +62,7 @@ export async function getMyTask(id: string) {
   const supabase = createClient(); // RLS scopes to assigned buddy
   const { data } = await supabase
     .from("requests")
-    .select("*, service_types(name), proofs(id, kind, note, created_at)")
+    .select("*, service_types(name), proofs(id, kind, note, file_url, created_at)")
     .eq("id", id).single();
   return data ?? null;
 }

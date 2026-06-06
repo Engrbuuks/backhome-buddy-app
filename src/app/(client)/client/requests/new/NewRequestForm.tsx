@@ -66,6 +66,10 @@ export default function NewRequestForm({ services, regions, recipients = [], zon
           <div className="rounded-2xl bg-bbb-soft p-3 text-sm font-semibold text-bbb-dark">{priceHint}</div>
         )}
         <TextAreaField label="Describe what you need" name="description" placeholder="Give as much detail as possible..." />
+        <div>
+          <TextAreaField label="Your checklist (optional)" name="expectations" rows={4} placeholder={"One item per line — what does success look like?\ne.g. Photo of the building from the street\ne.g. Confirm the caretaker's name and phone\ne.g. Video walking through every room"} />
+          <p className="mt-1 text-xs text-bbb-slate">We&apos;ll share this with your buddy and check the proof against it. Your confirmed quote remains the agreed scope.</p>
+        </div>
         <SelectField label="Urgency" name="urgency">
           <option value="standard">Standard</option>
           <option value="urgent">Urgent</option>

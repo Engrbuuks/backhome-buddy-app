@@ -13,8 +13,8 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
 
   const proofs = request.proofs ?? [];
   return (
-    <div className="mt-5 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
-      <h2 className="font-display text-lg font-extrabold">Workflow</h2>
+    <div className="mb-5 rounded-3xl border-2 border-bbb-strong/30 bg-white p-5 shadow-soft">
+      <h2 className="font-display text-lg font-extrabold">Next action</h2>
       {error && <div className="mt-3"><ErrorState title="Action failed" message={error} /></div>}
 
       {request.status === "quoted" && (

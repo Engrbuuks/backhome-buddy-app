@@ -5,6 +5,7 @@ import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { formatClientMoney, formatDate } from "@/components/money";
 import { useState, useTransition } from "react";
 import { confirmCompletion } from "@/lib/requests/confirm-actions";
+import ClientCharges from "./ClientCharges";
 import { cancelRequest, raiseDispute } from "@/lib/money/edge-actions";
 import { ProofMedia } from "@/components/ProofMedia";
 import { useFormState } from "react-dom";
@@ -13,7 +14,7 @@ import { ErrorState } from "@/components/StateBlocks";
 const LIFECYCLE = ["submitted", "quoted", "paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed"] as const;
 const PROOF_ICON = { photo: Camera, video: Video, report: FileText } as const;
 
-export default function RequestDetails({ request }: { request: any }) {
+export default function RequestDetails({ request, charges = [] }: { request: any; charges?: any[] }) {
   const [confirmError, setConfirmError] = useState("");
   const [confirming, startConfirm] = useTransition();
   const [cancelError, setCancelError] = useState("");
@@ -35,6 +36,7 @@ export default function RequestDetails({ request }: { request: any }) {
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <section className="space-y-5">
+          <ClientCharges charges={charges} />
           <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
             <div className="flex flex-wrap gap-2"><StatusPill status={request.status} /></div>
             {request.description && <p className="mt-4 text-sm leading-7 text-bbb-slate">{request.description}</p>}
