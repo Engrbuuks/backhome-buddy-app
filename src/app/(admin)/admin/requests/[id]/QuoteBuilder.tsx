@@ -10,9 +10,14 @@ import { sendQuote } from "@/lib/admin/quote-actions";
 
 interface Item { label: string; amount_ngn: number }
 
-export default function QuoteBuilder({ request, actionSlot, expectations }: { request: any; actionSlot?: React.ReactNode; expectations?: string | null }) {
+export default function QuoteBuilder({ request, actionSlot, expectations, urgentSurchargePct = 40 }: { request: any; actionSlot?: React.ReactNode; expectations?: string | null; urgentSurchargePct?: number }) {
   const existing: Item[] = (request.quote_items ?? []).map((q: any) => ({ label: q.label, amount_ngn: Number(q.amount_ngn) }));
-  const [items, setItems] = useState<Item[]>(existing.length ? existing : [{ label: request.service_types?.name ?? "Service", amount_ngn: Number(request.service_types?.base_price_ngn ?? 0) }]);
+  const basePrice = Number(request.service_types?.base_price_ngn ?? 0);
+  const defaults: Item[] = [{ label: request.service_types?.name ?? "Service", amount_ngn: basePrice }];
+  if (request.urgency === "urgent") {
+    defaults.push({ label: "Urgent priority surcharge", amount_ngn: Math.round(basePrice * urgentSurchargePct / 100) });
+  }
+  const [items, setItems] = useState<Item[]>(existing.length ? existing : defaults);
   const [payout, setPayout] = useState<number>(Number(request.buddy_payout_ngn ?? 0));
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -41,7 +46,7 @@ export default function QuoteBuilder({ request, actionSlot, expectations }: { re
         description={`${request.profiles?.full_name ?? "Client"} · ${request.profiles?.email ?? ""}`} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusPill status={request.status} />
-        {request.urgency === "urgent" && <StatusPill status="Pending" />}
+        {request.urgency === "urgent" && <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">Urgent — quote within 6h</span>}
       </div>
       {actionSlot}
       {expectations && (

@@ -5,15 +5,17 @@ import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { Field } from "@/components/FormControls";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
-import { saveServiceType, deleteServiceType, saveZoneUpliftPct } from "@/lib/admin/config-actions";
+import { saveServiceType, deleteServiceType, saveZoneUpliftPct, saveUrgentSurchargePct } from "@/lib/admin/config-actions";
 import type { ServiceType } from "@/types/db";
 
 type Row = Partial<ServiceType> & { _new?: boolean };
 
-export default function ServicesEditor({ initial, upliftPct }: { initial: ServiceType[]; upliftPct: number }) {
+export default function ServicesEditor({ initial, upliftPct, urgentPct }: { initial: ServiceType[]; upliftPct: number; urgentPct: number }) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [uplift, setUplift] = useState(String(upliftPct));
   const [upliftSaved, setUpliftSaved] = useState(false);
+  const [urgent, setUrgent] = useState(String(urgentPct));
+  const [urgentSaved, setUrgentSaved] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -73,6 +75,13 @@ export default function ServicesEditor({ initial, upliftPct }: { initial: Servic
         <Field label="Uplift %" type="number" value={uplift} onChange={(e) => { setUplift(e.target.value); setUpliftSaved(false); }} className="w-28" />
         <button disabled={pending} onClick={() => startTransition(async () => { try { await saveZoneUpliftPct(Number(uplift)); setUpliftSaved(true); } catch (e) { setError(e instanceof Error ? e.message : "Save failed."); } })} className="h-11 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save uplift</button>
         {upliftSaved && <span className="text-sm font-semibold text-green-700">Saved ✓</span>}
+        <div className="ml-2 border-l border-bbb-border pl-4">
+          <p className="text-sm font-bold">Urgent surcharge</p>
+          <p className="text-xs text-bbb-slate">Added on top for urgent tasks (shown to the client before submitting).</p>
+        </div>
+        <Field label="Surcharge %" type="number" value={urgent} onChange={(e) => { setUrgent(e.target.value); setUrgentSaved(false); }} className="w-28" />
+        <button disabled={pending} onClick={() => startTransition(async () => { try { await saveUrgentSurchargePct(Number(urgent)); setUrgentSaved(true); } catch (e) { setError(e instanceof Error ? e.message : "Save failed."); } })} className="h-11 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save surcharge</button>
+        {urgentSaved && <span className="text-sm font-semibold text-green-700">Saved ✓</span>}
       </div>
       {rows.length === 0 ? (
         <EmptyState title="No services yet" description="Add your first service type to get started." actionLabel="Add service" onAction={addRow} />

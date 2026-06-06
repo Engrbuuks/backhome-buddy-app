@@ -14,16 +14,19 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 // Active service types + regions for the client's New Request form dropdowns.
 export async function getRequestFormOptions() {
   const supabase = createClient();
-  const [{ data: services }, { data: regions }, { data: upliftRow }] = await Promise.all([
+  const [{ data: services }, { data: regions }, { data: upliftRow }, { data: urgentRow }] = await Promise.all([
     supabase.from("service_types").select("id, name, base_price_ngn, pricing_mode, from_price_usd").eq("active", true).order("sort_order"),
     supabase.from("regions").select("id, name, state, zone").eq("active", true).order("name"),
     supabase.from("app_settings").select("value").eq("key", "pricing_zone_b_uplift_pct").maybeSingle(),
+    supabase.from("app_settings").select("value").eq("key", "pricing_urgent_surcharge_pct").maybeSingle(),
   ]);
   const pct = Number((upliftRow?.value as any)?.pct);
+  const upct = Number((urgentRow?.value as any)?.pct);
   return {
     services: services ?? [],
     regions: regions ?? [],
     zoneBUpliftPct: Number.isFinite(pct) && pct >= 0 ? pct : 25,
+    urgentSurchargePct: Number.isFinite(upct) && upct >= 0 ? upct : 40,
   };
 }
 

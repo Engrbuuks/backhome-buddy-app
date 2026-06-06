@@ -71,6 +71,26 @@ export async function getZoneUpliftPct(): Promise<number> {
   return Number.isFinite(pct) && pct >= 0 ? pct : 25;
 }
 
+export async function getUrgentSurchargePct(): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "pricing_urgent_surcharge_pct").maybeSingle();
+  const pct = Number((data?.value as any)?.pct);
+  return Number.isFinite(pct) && pct >= 0 ? pct : 40;
+}
+
+export async function saveUrgentSurchargePct(pct: number) {
+  await assertAdmin();
+  if (!Number.isFinite(pct) || pct < 0 || pct > 200) throw new Error("Surcharge must be between 0 and 200%.");
+  const db = createAdminClient();
+  const { error } = await db.from("app_settings").upsert({
+    key: "pricing_urgent_surcharge_pct",
+    value: { pct },
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin/services");
+}
+
 export async function saveZoneUpliftPct(pct: number) {
   await assertAdmin();
   if (!Number.isFinite(pct) || pct < 0 || pct > 200) throw new Error("Uplift must be between 0 and 200%.");

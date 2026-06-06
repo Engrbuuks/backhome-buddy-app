@@ -8,32 +8,38 @@ import { createRequest } from "@/lib/requests/actions";
 interface ServiceOpt { id: string; name: string; pricing_mode?: string; from_price_usd?: number }
 interface RegionOpt { id: string; name: string; state?: string | null; zone?: string }
 
-export default function NewRequestForm({ services, regions, recipients = [], zoneBUpliftPct = 25 }: {
-  services: ServiceOpt[]; regions: RegionOpt[]; recipients?: any[]; zoneBUpliftPct?: number;
+export default function NewRequestForm({ services, regions, recipients = [], zoneBUpliftPct = 25, urgentSurchargePct = 40 }: {
+  services: ServiceOpt[]; regions: RegionOpt[]; recipients?: any[]; zoneBUpliftPct?: number; urgentSurchargePct?: number;
 }) {
   const [rec, setRec] = React.useState({ name: "", phone: "", address: "" });
   const [serviceId, setServiceId] = React.useState("");
   const [regionId, setRegionId] = React.useState("");
+  const [urgency, setUrgency] = React.useState("standard");
   const [state, formAction] = useFormState(createRequest, { error: "" });
 
   const service = services.find((s) => s.id === serviceId);
   const region = regions.find((r) => r.id === regionId);
   const isOther = regionId === "__other__";
 
+  const isUrgent = urgency === "urgent";
   let priceHint: string | null = null;
   if (service) {
     if (service.pricing_mode === "from" && Number(service.from_price_usd) > 0) {
-      const base = Number(service.from_price_usd);
+      let base = Number(service.from_price_usd);
       if (isOther) {
         priceHint = "We'll review your location and send a free quote if we can reach it.";
       } else if (region) {
-        const amount = region.zone === "A" ? base : Math.round(base * (1 + zoneBUpliftPct / 100));
-        priceHint = `From $${amount} in ${region.name}. Final quote confirmed before any payment.`;
+        let amount = region.zone === "A" ? base : base * (1 + zoneBUpliftPct / 100);
+        if (isUrgent) amount = amount * (1 + urgentSurchargePct / 100);
+        priceHint = `From $${Math.round(amount)}${isUrgent ? " (urgent)" : ""} in ${region.name}. Final quote confirmed before any payment.`;
       } else {
-        priceHint = `From $${base} (major metros). Select a state for your exact starting price.`;
+        let amount = isUrgent ? base * (1 + urgentSurchargePct / 100) : base;
+        priceHint = `From $${Math.round(amount)}${isUrgent ? " (urgent)" : ""} (major metros). Select a state for your exact starting price.`;
       }
     } else {
-      priceHint = "Priced per task — you'll get a free, detailed quote within 24 hours.";
+      priceHint = isUrgent
+        ? "Priced per task with a priority surcharge for urgent handling — reflected in your free quote (within 6 hours for urgent requests)."
+        : "Priced per task — you'll get a free, detailed quote within 24 hours.";
     }
   }
 
@@ -70,10 +76,13 @@ export default function NewRequestForm({ services, regions, recipients = [], zon
           <TextAreaField label="Your checklist (optional)" name="expectations" rows={4} placeholder={"One item per line — what does success look like?\ne.g. Photo of the building from the street\ne.g. Confirm the caretaker's name and phone\ne.g. Video walking through every room"} />
           <p className="mt-1 text-xs text-bbb-slate">We&apos;ll share this with your buddy and check the proof against it. Your confirmed quote remains the agreed scope.</p>
         </div>
-        <SelectField label="Urgency" name="urgency">
-          <option value="standard">Standard</option>
-          <option value="urgent">Urgent</option>
-        </SelectField>
+        <div>
+          <SelectField label="Urgency" name="urgency" value={urgency} onChange={(e) => setUrgency(e.target.value)}>
+            <option value="standard">Standard</option>
+            <option value="urgent">Urgent — needs to start within 24–48 hours</option>
+          </SelectField>
+          <p className="mt-1 text-xs text-bbb-slate">Urgent tasks jump the queue, are quoted within 6 hours, and carry a priority surcharge.</p>
+        </div>
         {recipients.length > 0 && (
           <SelectField label="Use a saved recipient" onChange={(e) => { const r = recipients.find((x) => x.id === e.target.value); if (r) setRec({ name: r.name ?? "", phone: r.phone ?? "", address: r.address ?? "" }); }}>
             <option value="">Choose saved recipient (optional)</option>

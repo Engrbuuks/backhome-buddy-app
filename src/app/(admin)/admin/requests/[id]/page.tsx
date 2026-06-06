@@ -6,6 +6,7 @@ import QuoteBuilder from "./QuoteBuilder";
 import WorkflowPanel from "./WorkflowPanel";
 import ChargesPanel from "./ChargesPanel";
 import { listCharges } from "@/lib/admin/charge-actions";
+import { getUrgentSurchargePct } from "@/lib/admin/config-actions";
 
 export default async function AdminRequestPage({ params }: { params: { id: string } }) {
   const request = await getRequestForAdmin(params.id);
@@ -13,10 +14,12 @@ export default async function AdminRequestPage({ params }: { params: { id: strin
   request.proofs = await signProofUrls(request.proofs ?? []);
   const buddies = request.status === "paid" ? await listApprovedBuddies() : [];
   const charges = await listCharges(params.id);
+  const urgentPct = await getUrgentSurchargePct();
   return (
     <QuoteBuilder
       request={request}
       expectations={request.expectations}
+      urgentSurchargePct={urgentPct}
       actionSlot={<><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}</>}
     />
   );
