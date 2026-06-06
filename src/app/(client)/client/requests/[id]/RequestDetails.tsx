@@ -37,6 +37,12 @@ export default function RequestDetails({ request, charges = [] }: { request: any
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <section className="space-y-5">
           <ClientCharges charges={charges} />
+          {request.report && (
+            <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
+              <h2 className="font-display text-lg font-extrabold">Completion report</h2>
+              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-bbb-charcoal">{request.report}</p>
+            </div>
+          )}
           <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
             <div className="flex flex-wrap gap-2"><StatusPill status={request.status} /></div>
             {request.description && <p className="mt-4 text-sm leading-7 text-bbb-slate">{request.description}</p>}

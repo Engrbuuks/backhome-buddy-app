@@ -109,3 +109,61 @@ async function callAnthropic(apiKey: string, system: string, history: Msg[]): Pr
     .map((b) => b.text ?? "")
     .join("\n");
 }
+
+// ---------- Generic one-shot generation for admin AI assists ----------
+// Reuses the same provider chain (Gemini free tier first, then Anthropic).
+// `images` are optional {mimeType, base64} attachments (Gemini multimodal).
+export type AiImage = { mimeType: string; base64: string };
+
+export async function aiGenerate(system: string, userText: string, images: AiImage[] = []): Promise<{ text?: string; error?: string }> {
+  const gemini = process.env.GEMINI_API_KEY;
+  const anthropic = process.env.ANTHROPIC_API_KEY;
+  if (!gemini && !anthropic) return { error: "No AI key configured — add GEMINI_API_KEY in Vercel env vars." };
+  try {
+    if (gemini) {
+      const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+      const parts: any[] = [{ text: userText }];
+      for (const img of images.slice(0, 8)) {
+        parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
+      }
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": gemini },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system }] },
+            contents: [{ role: "user", parts }],
+            generationConfig: { maxOutputTokens: 1800, temperature: 0.3 },
+          }),
+        }
+      );
+      if (!res.ok) throw new Error(`Gemini ${res.status}`);
+      const data = await res.json();
+      const text = ((data.candidates?.[0]?.content?.parts ?? []) as { text?: string }[])
+        .map((q) => q.text ?? "").join("\n").trim();
+      return text ? { text } : { error: "AI returned an empty response — try again." };
+    }
+    // Anthropic fallback (text + images)
+    const content: any[] = images.slice(0, 8).map((img) => ({
+      type: "image", source: { type: "base64", media_type: img.mimeType, data: img.base64 },
+    }));
+    content.push({ type: "text", text: userText });
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": anthropic as string, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
+        max_tokens: 1800, system,
+        messages: [{ role: "user", content }],
+      }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+    const text = ((data.content ?? []) as { type: string; text?: string }[])
+      .filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n").trim();
+    return text ? { text } : { error: "AI returned an empty response — try again." };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "AI request failed." };
+  }
+}

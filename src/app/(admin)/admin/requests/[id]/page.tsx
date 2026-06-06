@@ -5,6 +5,7 @@ import { signProofUrls } from "@/lib/storage/sign";
 import QuoteBuilder from "./QuoteBuilder";
 import WorkflowPanel from "./WorkflowPanel";
 import ChargesPanel from "./ChargesPanel";
+import AiAssist from "./AiAssist";
 import { listCharges } from "@/lib/admin/charge-actions";
 import { getUrgentSurchargePct } from "@/lib/admin/config-actions";
 
@@ -20,7 +21,7 @@ export default async function AdminRequestPage({ params }: { params: { id: strin
       request={request}
       expectations={request.expectations}
       urgentSurchargePct={urgentPct}
-      actionSlot={<><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}</>}
+      actionSlot={<><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}<AiAssist request={request} /></>}
     />
   );
 }

@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { sendQuote } from "@/lib/admin/quote-actions";
+import { aiSuggestQuoteItems } from "@/lib/ai/assist-actions";
 
 interface Item { label: string; amount_ngn: number }
 
@@ -30,6 +31,15 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
 
   function update(i: number, patch: Partial<Item>) {
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  }
+
+  function aiSuggest() {
+    setError("");
+    startTransition(async () => {
+      const res = await aiSuggestQuoteItems(request.id);
+      if (res?.error) { setError(res.error); return; }
+      if (res.items?.length) setItems(res.items);
+    });
   }
 
   function submit() {
@@ -76,6 +86,7 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-extrabold">Line items</h2>
             <button onClick={() => setItems((a) => [...a, { label: "", amount_ngn: 0 }])} className="flex items-center gap-1 rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold hover:border-bbb-strong"><Plus className="h-3.5 w-3.5" />Add item</button>
+            {quotable && <button disabled={pending} onClick={aiSuggest} className="rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold text-bbb-strong hover:border-bbb-strong disabled:opacity-50">{pending ? "…" : "✦ AI suggest items"}</button>}
           </div>
           <div className="space-y-3">
             {items.map((it, i) => (

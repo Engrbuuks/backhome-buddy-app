@@ -4,6 +4,7 @@ import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes } from "@/lib/admin/ops-actions";
+import { aiScreenBuddy } from "@/lib/ai/assist-actions";
 import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
@@ -31,6 +32,13 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
   const doneCount = VETTING_CHECKS.filter(([k]) => checks[k]).length;
   const allDone = doneCount === VETTING_CHECKS.length;
   const [notes, setNotes] = useState(b.vetting_notes ?? "");
+  const [screening, setScreening] = useState(false);
+  async function screen() {
+    setScreening(true);
+    const r = await aiScreenBuddy(b.id);
+    if (r.text) setNotes((n: string) => (n ? n + "\n\n--- AI screening ---\n" : "") + r.text);
+    setScreening(false);
+  }
   const gs = Array.isArray(b.guarantors) ? b.guarantors : [];
   const nok = b.next_of_kin ?? {};
 
@@ -103,7 +111,10 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           )}
         </div>
         <div className="rounded-2xl bg-bbb-bg p-4">
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting notes</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting notes</p>
+            <button disabled={screening || pending} onClick={screen} className="rounded-lg border border-bbb-border px-3 py-1 text-xs font-bold text-bbb-strong hover:border-bbb-strong disabled:opacity-50">{screening ? "Screening…" : "✦ AI screening notes"}</button>
+          </div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Interview impressions, guarantor call summaries, anything future-you should know…" className="w-full rounded-xl border border-bbb-border bg-white p-3 text-sm outline-none focus:border-bbb-strong" />
           <button disabled={pending} onClick={() => run(() => saveVettingNotes(b.id, notes))} className="mt-2 rounded-lg bg-bbb-strong px-3 py-1.5 text-xs font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save notes</button>
         </div>
