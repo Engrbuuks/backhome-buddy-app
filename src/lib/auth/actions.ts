@@ -119,13 +119,19 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
     email, password,
     options: { data: { full_name: fullName } },
   });
-  if (error) return { error: error.message };
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("rate limit")) return { error: "We've hit our email-sending limit for the moment. Please try again in about an hour — your details are not lost." };
+    if (msg.includes("already registered") || msg.includes("already been registered")) return { error: "An account already exists with this email. Try logging in instead, or use a different email." };
+    return { error: error.message };
+  }
   const userId = data.user?.id;
-  if (!userId) return { error: "Could not create your account — try again." };
+  if (!userId) return { error: "Could not create your account — please try again." };
 
   const db = createAdminClient();
-  await db.from("profiles").update({ role: "buddy", phone, full_name: fullName }).eq("id", userId);
-  await db.from("buddy_profiles").insert({
+  const { error: profErr } = await db.from("profiles").update({ role: "buddy", phone, full_name: fullName }).eq("id", userId);
+  if (profErr) return { error: `Account created but profile setup failed (${profErr.message}). Please contact support before retrying.` };
+  const { error: bpErr } = await db.from("buddy_profiles").insert({
     id: userId, vetting: "under_review", skills,
     city, date_of_birth: dob, nin, address, state: stateName, lga,
     coverage_areas: coverage, occupation, experience, availability,
@@ -133,6 +139,7 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
     criminal_record: criminalRecord === "yes", criminal_record_details: criminalDetails || null,
     consent_background_checks: consentChecks, consent_data_processing: consentData,
   });
+  if (bpErr) return { error: `Account created but application details failed to save (${bpErr.message}). Please contact support — do not re-submit.` };
   await db.from("audit_log").insert({ actor_id: userId, action: "buddy_application", detail: { city, state: stateName, lga, skills } });
   await notifyAdmins("New buddy application", `${fullName} (${city}, ${stateName}) applied — review and vet.`, "/admin/buddies");
   return { error: "", done: true };

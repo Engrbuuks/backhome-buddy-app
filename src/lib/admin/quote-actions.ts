@@ -51,6 +51,8 @@ export async function sendQuote(input: {
     client_price_ngn: clientPrice,
     buddy_payout_ngn: payout,
     status: "quoted",
+      quote_decision: null,
+      quote_decision_note: null,
     updated_at: new Date().toISOString(),
   }).eq("id", req.id);
   if (upErr) return { error: upErr.message };

@@ -6,6 +6,7 @@ import { formatClientMoney, formatDate } from "@/components/money";
 import { useState, useTransition } from "react";
 import { confirmCompletion } from "@/lib/requests/confirm-actions";
 import ClientCharges from "./ClientCharges";
+import QuoteResponse from "./QuoteResponse";
 import { cancelRequest, raiseDispute } from "@/lib/money/edge-actions";
 import { ProofMedia } from "@/components/ProofMedia";
 import { useFormState } from "react-dom";
@@ -36,6 +37,7 @@ export default function RequestDetails({ request, charges = [] }: { request: any
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <section className="space-y-5">
+          <QuoteResponse request={request} />
           <ClientCharges charges={charges} />
           {request.report && (
             <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
