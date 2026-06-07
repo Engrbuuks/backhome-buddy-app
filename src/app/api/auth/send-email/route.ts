@@ -118,3 +118,35 @@ export async function POST(req: NextRequest) {
   }
   return NextResponse.json({});
 }
+
+/** Self-diagnostic: open https://app.backhomebuddy.NG/api/auth/send-email in a
+ *  browser. Reports which env pieces the running deployment can actually see
+ *  (booleans only — no secret values). Add ?selftest=1 to attempt a real
+ *  Resend send to the FROM address itself, surfacing Resend's exact verdict. */
+export async function GET(req: NextRequest) {
+  const report: Record<string, unknown> = {
+    deployment_ok: true,
+    SEND_EMAIL_HOOK_SECRET_configured: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),
+    RESEND_API_KEY_configured: Boolean(process.env.RESEND_API_KEY),
+    NEXT_PUBLIC_SUPABASE_URL_configured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    sender: FROM,
+    hint: "All three must be true. If one is false: fix the Vercel env var (exact name, Production scope) and REDEPLOY.",
+  };
+
+  if (new URL(req.url).searchParams.get("selftest") === "1" && process.env.RESEND_API_KEY) {
+    const selfAddress = FROM.includes("<") ? FROM.split("<")[1].replace(">", "").trim() : FROM;
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+        body: JSON.stringify({ from: FROM, to: [selfAddress], subject: "Backhome Buddy — email self-test", html: "<p>If you can read this, Resend sending works end to end.</p>" }),
+      });
+      report.selftest_status = res.status;
+      report.selftest_response = (await res.text().catch(() => "")).slice(0, 400);
+      report.selftest_verdict = res.ok ? `SENT — check the ${selfAddress} inbox` : "FAILED — the response above is Resend's exact reason";
+    } catch (e) {
+      report.selftest_verdict = `Network error: ${e instanceof Error ? e.message : "unknown"}`;
+    }
+  }
+  return NextResponse.json(report);
+}
