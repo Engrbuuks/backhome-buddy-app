@@ -26,6 +26,9 @@ export default function LoginForm() {
             {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             {show ? "Hide password" : "Show password"}
           </button>
+          <div className="mt-2 text-right">
+            <a href="/forgot-password" className="text-xs font-semibold text-bbb-strong hover:text-bbb-dark">Forgot password?</a>
+          </div>
         </div>
         <button className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">Sign in</button>
         <p className="text-center text-sm text-bbb-slate">

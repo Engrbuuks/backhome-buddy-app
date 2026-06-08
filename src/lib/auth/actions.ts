@@ -144,3 +144,30 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   await notifyAdmins("New buddy application", `${fullName} (${city}, ${stateName}) applied — review and vet.`, "/admin/buddies");
   return { error: "", done: true };
 }
+
+/** Send a password-reset email. Always returns success (don't reveal whether
+ *  an email is registered). The recovery email is delivered via the send-email
+ *  hook, branded. */
+export async function requestPasswordReset(_prev: unknown, formData: FormData) {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email address." };
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
+  const supabase = createClient();
+  await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/reset-password` });
+  return { error: "", done: true };
+}
+
+/** Set a new password. The user arrives here from the recovery link, which
+ *  establishes a temporary session, so updateUser can set the password. */
+export async function updatePassword(_prev: unknown, formData: FormData) {
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirm) return { error: "The two passwords don't match." };
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Your reset link has expired or is invalid. Please request a new one." };
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: error.message };
+  return { error: "", done: true };
+}
