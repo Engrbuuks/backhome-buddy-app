@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { saveRegion, deleteRegion } from "@/lib/admin/config-actions";
 
-interface Region { id?: string; name: string; state?: string | null; active?: boolean; _new?: boolean; }
+interface Region { id?: string; name: string; state?: string | null; zone?: string; active?: boolean; _new?: boolean; }
 
 export default function RegionsEditor({ initial }: { initial: Region[] }) {
   const [rows, setRows] = useState<Region[]>(initial);
@@ -18,7 +18,7 @@ export default function RegionsEditor({ initial }: { initial: Region[] }) {
     setRows((r) => r.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
   }
   function addRow() {
-    setRows((r) => [...r, { _new: true, name: "", state: "", active: true }]);
+    setRows((r) => [...r, { _new: true, name: "", state: "", zone: "B", active: true }]);
   }
   function save(idx: number) {
     const row = rows[idx];
@@ -26,7 +26,7 @@ export default function RegionsEditor({ initial }: { initial: Region[] }) {
     setError("");
     startTransition(async () => {
       try {
-        await saveRegion({ id: row.id, name: row.name, state: row.state ?? "", active: row.active ?? true });
+        await saveRegion({ id: row.id, name: row.name, state: row.state ?? "", zone: row.zone === "A" ? "A" : "B", active: row.active ?? true });
         setRows((r) => r.map((x, i) => (i === idx ? { ...x, _new: false } : x)));
       } catch (e) { setError(e instanceof Error ? e.message : "Save failed."); }
     });
@@ -57,9 +57,16 @@ export default function RegionsEditor({ initial }: { initial: Region[] }) {
       ) : (
         <div className="space-y-3">
           {rows.map((region, idx) => (
-            <article key={region.id ?? `new-${idx}`} className="grid gap-3 rounded-3xl border border-bbb-border bg-white p-4 shadow-soft md:grid-cols-[1fr_1fr_110px_auto] md:items-end">
+            <article key={region.id ?? `new-${idx}`} className="grid gap-3 rounded-3xl border border-bbb-border bg-white p-4 shadow-soft md:grid-cols-[1fr_1fr_150px_110px_auto] md:items-end">
               <Field label="Region / City" value={region.name ?? ""} onChange={(e) => update(idx, "name", e.target.value)} />
               <Field label="State" value={region.state ?? ""} onChange={(e) => update(idx, "state", e.target.value)} />
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Pricing zone</span>
+                <select value={region.zone === "A" ? "A" : "B"} onChange={(e) => update(idx, "zone", e.target.value)} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong">
+                  <option value="A">A — base price</option>
+                  <option value="B">B — base + uplift</option>
+                </select>
+              </label>
               <div>
                 <p className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Status</p>
                 <div className="pt-1"><StatusPill status={region.active === false ? "Inactive" : "Active"} /></div>

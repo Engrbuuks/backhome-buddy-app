@@ -13,8 +13,14 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
 
   const proofs = request.proofs ?? [];
   return (
-    <div className="mt-5 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
-      <h2 className="font-display text-lg font-extrabold">Workflow</h2>
+    <div className="mb-5 rounded-3xl border-2 border-bbb-strong/30 bg-white p-5 shadow-soft">
+      <h2 className="font-display text-lg font-extrabold">Next action</h2>
+      {request.status === "quoted" && request.quote_decision === "accepted" && (
+        <p className="mt-2 rounded-xl bg-green-50 p-2.5 text-sm font-semibold text-green-700">Client accepted the quote ✓ — send payment instructions, then record the payment below once it lands.</p>
+      )}
+      {request.status === "quoted" && request.quote_decision === "changes_requested" && (
+        <p className="mt-2 rounded-xl bg-amber-50 p-2.5 text-sm font-semibold text-amber-800">Client requested changes: &quot;{request.quote_decision_note}&quot; — adjust the quote and re-send.</p>
+      )}
       {error && <div className="mt-3"><ErrorState title="Action failed" message={error} /></div>}
 
       {request.status === "quoted" && (
@@ -26,15 +32,30 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
 
       {request.status === "paid" && (
         <div className="mt-4">
-          <p className="text-sm text-bbb-slate">Funds held. Assign an approved buddy.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <select value={buddyId} onChange={(e) => setBuddyId(e.target.value)} className="h-11 rounded-xl border border-bbb-border bg-white px-3 text-sm">
-              <option value="">Select buddy…</option>
-              {buddies.map((b: any) => <option key={b.id} value={b.id}>{b.profiles?.full_name ?? b.profiles?.email}</option>)}
-            </select>
-            <button disabled={pending || !buddyId} onClick={() => run(() => assignBuddy(request.id, buddyId))} className="h-11 rounded-xl bg-bbb-strong px-5 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Assign buddy</button>
-          </div>
-          {buddies.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved buddies — approve one in Supabase (buddy_profiles.vetting = approved) or via Buddy Management later.</p>}
+          <p className="text-sm text-bbb-slate">Funds held. Assign an approved buddy{request.regions?.name ? ` — suggested in ${request.regions.name}` : ""}.</p>
+          {(() => {
+            const reqState = (request.regions?.name ?? "").toLowerCase();
+            const local = reqState ? buddies.filter((b: any) => (b.state ?? "").toLowerCase() === reqState || (b.coverage_areas ?? "").toLowerCase().includes(reqState)) : [];
+            const others = local.length ? buddies.filter((b: any) => !local.includes(b)) : buddies;
+            const label = (b: any) => `${b.profiles?.full_name ?? b.profiles?.email}${b.city ? ` · ${b.city}` : ""}${b.state ? `, ${b.state}` : ""}${Array.isArray(b.skills) && b.skills.length ? ` · ${b.skills.slice(0,2).join(", ")}` : ""}`;
+            return (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <select value={buddyId} onChange={(e) => setBuddyId(e.target.value)} className="h-11 min-w-[280px] rounded-xl border border-bbb-border bg-white px-3 text-sm">
+                  <option value="">Select buddy…</option>
+                  {local.length > 0 && (
+                    <optgroup label={`In ${request.regions?.name} (recommended)`}>
+                      {local.map((b: any) => <option key={b.id} value={b.id}>{label(b)}</option>)}
+                    </optgroup>
+                  )}
+                  <optgroup label={local.length ? "Other approved buddies" : "Approved buddies"}>
+                    {others.map((b: any) => <option key={b.id} value={b.id}>{label(b)}</option>)}
+                  </optgroup>
+                </select>
+                <button disabled={pending || !buddyId} onClick={() => run(() => assignBuddy(request.id, buddyId))} className="h-11 rounded-xl bg-bbb-strong px-5 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Assign buddy</button>
+              </div>
+            );
+          })()}
+          {buddies.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved buddies yet — approve one in Buddy Management (all 8 vetting checks complete).</p>}
         </div>
       )}
 

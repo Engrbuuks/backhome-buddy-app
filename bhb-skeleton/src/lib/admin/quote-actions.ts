@@ -51,6 +51,8 @@ export async function sendQuote(input: {
     client_price_ngn: clientPrice,
     buddy_payout_ngn: payout,
     status: "quoted",
+      quote_decision: null,
+      quote_decision_note: null,
     updated_at: new Date().toISOString(),
   }).eq("id", req.id);
   if (upErr) return { error: upErr.message };
@@ -77,7 +79,7 @@ export async function getRequestForAdmin(id: string) {
   const db = createAdminClient();
   const { data } = await db
     .from("requests")
-    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), quote_items(id, label, amount_ngn), proofs(id, kind, note, created_at), profiles!requests_client_id_fkey(full_name, email)")
+    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), regions(name, zone), quote_items(id, label, amount_ngn), proofs(id, kind, note, file_url, created_at), profiles!requests_client_id_fkey(full_name, email)")
     .eq("id", id)
     .single();
   return data;

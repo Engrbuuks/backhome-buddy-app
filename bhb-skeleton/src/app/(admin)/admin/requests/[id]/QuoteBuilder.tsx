@@ -7,12 +7,18 @@ import { StatusPill } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { sendQuote } from "@/lib/admin/quote-actions";
+import { aiSuggestQuoteItems } from "@/lib/ai/assist-actions";
 
 interface Item { label: string; amount_ngn: number }
 
-export default function QuoteBuilder({ request }: { request: any }) {
+export default function QuoteBuilder({ request, actionSlot, expectations, urgentSurchargePct = 40 }: { request: any; actionSlot?: React.ReactNode; expectations?: string | null; urgentSurchargePct?: number }) {
   const existing: Item[] = (request.quote_items ?? []).map((q: any) => ({ label: q.label, amount_ngn: Number(q.amount_ngn) }));
-  const [items, setItems] = useState<Item[]>(existing.length ? existing : [{ label: request.service_types?.name ?? "Service", amount_ngn: Number(request.service_types?.base_price_ngn ?? 0) }]);
+  const basePrice = Number(request.service_types?.base_price_ngn ?? 0);
+  const defaults: Item[] = [{ label: request.service_types?.name ?? "Service", amount_ngn: basePrice }];
+  if (request.urgency === "urgent") {
+    defaults.push({ label: "Urgent priority surcharge", amount_ngn: Math.round(basePrice * urgentSurchargePct / 100) });
+  }
+  const [items, setItems] = useState<Item[]>(existing.length ? existing : defaults);
   const [payout, setPayout] = useState<number>(Number(request.buddy_payout_ngn ?? 0));
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -25,6 +31,15 @@ export default function QuoteBuilder({ request }: { request: any }) {
 
   function update(i: number, patch: Partial<Item>) {
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  }
+
+  function aiSuggest() {
+    setError("");
+    startTransition(async () => {
+      const res = await aiSuggestQuoteItems(request.id);
+      if (res?.error) { setError(res.error); return; }
+      if (res.items?.length) setItems(res.items);
+    });
   }
 
   function submit() {
@@ -41,8 +56,23 @@ export default function QuoteBuilder({ request }: { request: any }) {
         description={`${request.profiles?.full_name ?? "Client"} · ${request.profiles?.email ?? ""}`} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusPill status={request.status} />
-        {request.urgency === "urgent" && <StatusPill status="Pending" />}
+        {request.urgency === "urgent" && <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">Urgent — quote within 6h</span>}
       </div>
+      {actionSlot}
+      {expectations && (
+        <div className="mb-4 rounded-2xl border border-bbb-border bg-bbb-soft p-4 shadow-soft">
+          <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-dark">Client&apos;s checklist (context for the quote — the quote remains the agreed scope)</p>
+          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-bbb-charcoal">{expectations}</p>
+        </div>
+      )}
+      {(request.regions?.name || request.requested_state) && (
+        <div className="mb-4 rounded-2xl border border-bbb-border bg-white p-3 text-sm shadow-soft">
+          <span className="font-semibold">Location: </span>
+          {request.regions?.name
+            ? <>{request.regions.name} <span className="text-bbb-slate">(Zone {request.regions.zone ?? "B"})</span></>
+            : <span className="font-bold text-amber-700">Out of coverage — {request.requested_state} (expansion lead: quote only if we can reach it safely)</span>}
+        </div>
+      )}
       {request.description && (
         <div className="mb-5 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <p className="text-sm leading-7 text-bbb-slate">{request.description}</p>
@@ -56,6 +86,7 @@ export default function QuoteBuilder({ request }: { request: any }) {
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-extrabold">Line items</h2>
             <button onClick={() => setItems((a) => [...a, { label: "", amount_ngn: 0 }])} className="flex items-center gap-1 rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold hover:border-bbb-strong"><Plus className="h-3.5 w-3.5" />Add item</button>
+            {quotable && <button disabled={pending} onClick={aiSuggest} className="rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold text-bbb-strong hover:border-bbb-strong disabled:opacity-50">{pending ? "…" : "✦ AI suggest items"}</button>}
           </div>
           <div className="space-y-3">
             {items.map((it, i) => (

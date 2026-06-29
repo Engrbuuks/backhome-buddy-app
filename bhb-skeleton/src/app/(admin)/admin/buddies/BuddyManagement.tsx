@@ -1,9 +1,11 @@
 "use client";
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useMemo } from "react";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes } from "@/lib/admin/ops-actions";
+import { aiScreenBuddy } from "@/lib/ai/assist-actions";
+import { BuddyFilterBar, applyBuddyFilters, EMPTY_BUDDY_FILTER, type BuddyFilterValue } from "./BuddyFilters";
 import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
@@ -31,6 +33,13 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
   const doneCount = VETTING_CHECKS.filter(([k]) => checks[k]).length;
   const allDone = doneCount === VETTING_CHECKS.length;
   const [notes, setNotes] = useState(b.vetting_notes ?? "");
+  const [screening, setScreening] = useState(false);
+  async function screen() {
+    setScreening(true);
+    const r = await aiScreenBuddy(b.id);
+    if (r.text) setNotes((n: string) => (n ? n + "\n\n--- AI screening ---\n" : "") + r.text);
+    setScreening(false);
+  }
   const gs = Array.isArray(b.guarantors) ? b.guarantors : [];
   const nok = b.next_of_kin ?? {};
 
@@ -103,7 +112,10 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           )}
         </div>
         <div className="rounded-2xl bg-bbb-bg p-4">
-          <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting notes</p>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting notes</p>
+            <button disabled={screening || pending} onClick={screen} className="rounded-lg border border-bbb-border px-3 py-1 text-xs font-bold text-bbb-strong hover:border-bbb-strong disabled:opacity-50">{screening ? "Screening…" : "✦ AI screening notes"}</button>
+          </div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Interview impressions, guarantor call summaries, anything future-you should know…" className="w-full rounded-xl border border-bbb-border bg-white p-3 text-sm outline-none focus:border-bbb-strong" />
           <button disabled={pending} onClick={() => run(() => saveVettingNotes(b.id, notes))} className="mt-2 rounded-lg bg-bbb-strong px-3 py-1.5 text-xs font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save notes</button>
         </div>
@@ -116,6 +128,9 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [filter, setFilter] = useState<BuddyFilterValue>(EMPTY_BUDDY_FILTER);
+  const states = useMemo(() => Array.from(new Set(buddies.map((b: any) => b.state).filter(Boolean))).sort(), [buddies]);
+  const filtered = useMemo(() => applyBuddyFilters(buddies, filter, { showVetting: true }), [buddies, filter]);
   const run = (fn: () => Promise<{ error: string }>) => start(async () => { setError(""); const r = await fn(); if (r?.error) setError(r.error); });
 
   return (
@@ -138,8 +153,14 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
       {buddies.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-bbb-border bg-white p-8 text-center text-sm text-bbb-slate">No buddy applications yet.</div>
       ) : (
-        <div className="space-y-3">
-          {buddies.map((b: any) => {
+        <>
+          <BuddyFilterBar states={states} value={filter} onChange={setFilter} showVetting />
+          <p className="mb-3 text-xs text-bbb-slate">{filtered.length} of {buddies.length} buddies</p>
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-bbb-border bg-white p-8 text-center text-sm text-bbb-slate">No buddies match these filters.</div>
+          ) : (
+          <div className="space-y-3">
+          {filtered.map((b: any) => {
             const checks = (b.vetting_checks ?? {}) as Record<string, boolean>;
             const doneCount = VETTING_CHECKS.filter(([k]) => checks[k]).length;
             const isOpen = open === b.id;
@@ -164,7 +185,9 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
               </article>
             );
           })}
-        </div>
+          </div>
+          )}
+        </>
       )}
     </AdminShell>
   );

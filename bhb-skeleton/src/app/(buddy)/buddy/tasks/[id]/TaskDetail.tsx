@@ -57,6 +57,12 @@ export default function TaskDetail({ task }: { task: any }) {
         <div className="mt-2 flex items-center gap-3"><StatusPill status={task.status} />{task.buddy_payout_ngn != null && <span className="text-sm font-bold text-bbb-dark">Your payout: {formatNGN(Number(task.buddy_payout_ngn))}</span>}</div>
       </div>
       {task.description && <div className="mb-4 rounded-3xl border border-bbb-border bg-white p-5 text-sm leading-7 text-bbb-slate shadow-soft">{task.description}</div>}
+      {task.expectations && (
+        <div className="mb-4 rounded-3xl border border-bbb-border bg-bbb-soft p-5 shadow-soft">
+          <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-dark">Client&apos;s checklist — cover every item in your proof</p>
+          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-bbb-charcoal">{task.expectations}</p>
+        </div>
+      )}
       <div className="mb-4 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
         <p className="text-sm font-bold">Recipient</p>
         <p className="mt-1 text-sm text-bbb-slate">{task.recipient_name || "—"} · {task.recipient_phone || "—"}</p>

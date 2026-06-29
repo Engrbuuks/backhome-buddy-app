@@ -14,12 +14,20 @@ export default function RequestsQueue({ initial }: { initial: any[] }) {
   const [status, setStatus] = useState("All");
 
   const filtered = useMemo(() => {
-    return initial.filter((r) => {
-      const hay = [r.title, r.profiles?.full_name, r.profiles?.email, r.service_types?.name].join(" ").toLowerCase();
-      const matchQ = hay.includes(query.toLowerCase());
-      const matchS = status === "All" || r.status === status;
-      return matchQ && matchS;
-    });
+    const active = new Set(["submitted", "quoted", "awaiting_pay", "paid", "assigned", "in_progress", "proof_ready"]);
+    return initial
+      .filter((r) => {
+        const hay = [r.title, r.profiles?.full_name, r.profiles?.email, r.service_types?.name].join(" ").toLowerCase();
+        const matchQ = hay.includes(query.toLowerCase());
+        const matchS = status === "All" || r.status === status;
+        return matchQ && matchS;
+      })
+      .sort((a, b) => {
+        // Urgent + still-active requests float to the top; otherwise keep recency order.
+        const ua = a.urgency === "urgent" && active.has(a.status) ? 1 : 0;
+        const ub = b.urgency === "urgent" && active.has(b.status) ? 1 : 0;
+        return ub - ua;
+      });
   }, [initial, query, status]);
 
   return (
@@ -55,6 +63,7 @@ export default function RequestsQueue({ initial }: { initial: any[] }) {
               <span className="text-sm font-bold">{r.client_price_ngn != null ? formatNGN(r.client_price_ngn) : "—"}</span>
               <span className="text-xs text-bbb-slate">{formatDate(r.created_at)}</span>
               <StatusPill status={r.status} />
+              {r.urgency === "urgent" && <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">Urgent</span>}
             </Link>
           ))}
         </div>

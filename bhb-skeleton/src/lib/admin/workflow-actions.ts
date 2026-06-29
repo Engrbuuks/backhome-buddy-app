@@ -44,7 +44,7 @@ export async function recordManualPayment(requestId: string) {
 export async function listApprovedBuddies() {
   const p = await admin(); if (!p) return [];
   const db = createAdminClient();
-  const { data } = await db.from("buddy_profiles").select("id, vetting, skills, profiles!buddy_profiles_id_fkey(full_name, email)").eq("vetting", "approved");
+  const { data } = await db.from("buddy_profiles").select("id, vetting, skills, state, city, lga, coverage_areas, occupation, availability, profiles!buddy_profiles_id_fkey(full_name, email)").eq("vetting", "approved");
   return data ?? [];
 }
 
