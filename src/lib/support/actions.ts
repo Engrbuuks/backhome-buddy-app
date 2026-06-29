@@ -57,14 +57,14 @@ export async function listThreadsForAdmin() {
   const p = await getCurrentProfile();
   if (!p || p.role !== "admin") return [];
   const db = createAdminClient();
-  const { data: threads } = await db.from("chat_threads").select("id, user_id, status, last_message_at").order("last_message_at", { ascending: false }).limit(50);
+  const { data: threads } = await db.from("chat_threads").select("id, user_id, status, last_message_at, visitor_name, visitor_email").order("last_message_at", { ascending: false }).limit(50);
   const ids = (threads ?? []).map((t) => t.user_id).filter(Boolean);
   const { data: profs } = ids.length ? await db.from("profiles").select("id, full_name, email").in("id", ids) : { data: [] as any[] };
   const nameOf = new Map((profs ?? []).map((x) => [x.id, x.full_name ?? x.email]));
   const out: any[] = [];
   for (const t of threads ?? []) {
     const { data: last } = await db.from("chat_messages").select("content, sender").eq("thread_id", t.id).order("created_at", { ascending: false }).limit(1).single();
-    out.push({ ...t, user_name: t.user_id ? (nameOf.get(t.user_id) ?? "—") : "Website visitor", preview: last?.content?.slice(0, 90) ?? "", last_sender: last?.sender });
+    out.push({ ...t, user_name: t.user_id ? (nameOf.get(t.user_id) ?? "—") : (t.visitor_name ? t.visitor_name : "Website visitor"), visitor_email: t.visitor_email, preview: last?.content?.slice(0, 90) ?? "", last_sender: last?.sender });
   }
   return out;
 }
@@ -73,11 +73,12 @@ export async function getThreadForAdmin(id: string) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "admin") return null;
   const db = createAdminClient();
-  const { data: t } = await db.from("chat_threads").select("id, user_id").eq("id", id).single();
+  const { data: t } = await db.from("chat_threads").select("id, user_id, visitor_name, visitor_email").eq("id", id).single();
   if (!t) return null;
   const { data: prof } = t.user_id ? await db.from("profiles").select("full_name, email").eq("id", t.user_id).single() : { data: null };
   const { data: messages } = await db.from("chat_messages").select("*").eq("thread_id", id).order("created_at");
-  return { id: t.id, user: prof, messages: messages ?? [] };
+  const user = prof ?? (t.visitor_name || t.visitor_email ? { full_name: t.visitor_name, email: t.visitor_email } : null);
+  return { id: t.id, user, messages: messages ?? [] };
 }
 
 export async function staffReply(_prev: unknown, formData: FormData) {
