@@ -3,10 +3,11 @@ import React, { useState, useTransition, useMemo } from "react";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
-import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes } from "@/lib/admin/ops-actions";
+import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments } from "@/lib/admin/ops-actions";
 import { aiScreenBuddy } from "@/lib/ai/assist-actions";
 import { BuddyFilterBar, applyBuddyFilters, EMPTY_BUDDY_FILTER, type BuddyFilterValue } from "./BuddyFilters";
 import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
+import { REQUESTABLE_ITEMS } from "@/lib/admin/request-documents";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
@@ -34,6 +35,17 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
   const allDone = doneCount === VETTING_CHECKS.length;
   const [notes, setNotes] = useState(b.vetting_notes ?? "");
   const [screening, setScreening] = useState(false);
+  const [reqItems, setReqItems] = useState<string[]>([]);
+  const [reqSending, setReqSending] = useState(false);
+  const [reqMsg, setReqMsg] = useState("");
+  const toggleReq = (k: string) => setReqItems((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
+  const sendRequest = async () => {
+    setReqSending(true); setReqMsg("");
+    const res = await requestBuddyDocuments(b.id, reqItems);
+    setReqSending(false);
+    if (res.error) setReqMsg(res.error);
+    else { setReqMsg(`✓ Sent ${res.sent} item${res.sent === 1 ? "" : "s"} to ${res.to}`); setReqItems([]); }
+  };
   async function screen() {
     setScreening(true);
     const r = await aiScreenBuddy(b.id);
@@ -110,6 +122,38 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           {!allDone && b.vetting !== "approved" && (
             <p className="mt-3 rounded-lg bg-white p-2 text-xs text-bbb-slate">Approval unlocks when all checks are ticked.</p>
           )}
+        </div>
+
+        <div className="rounded-2xl bg-bbb-bg p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Request documents by email</p>
+            <button
+              type="button"
+              onClick={() => setReqItems(reqItems.length === REQUESTABLE_ITEMS.length ? [] : REQUESTABLE_ITEMS.map(([k]) => k))}
+              className="text-xs font-bold text-bbb-strong hover:text-bbb-dark"
+            >{reqItems.length === REQUESTABLE_ITEMS.length ? "Clear all" : "Select all"}</button>
+          </div>
+          <p className="mb-2 text-xs text-bbb-slate">Tick what you need, then email the buddy asking them to reply with these items.</p>
+          <div className="space-y-2">
+            {REQUESTABLE_ITEMS.map(([key, label]) => (
+              <label key={key} className="flex items-start gap-2.5 text-sm leading-5">
+                <input
+                  type="checkbox"
+                  checked={reqItems.includes(key)}
+                  disabled={reqSending}
+                  onChange={() => toggleReq(key)}
+                  className="mt-0.5 h-4 w-4 rounded border-bbb-border accent-[#079516]"
+                />
+                <span className={reqItems.includes(key) ? "text-bbb-charcoal" : "text-bbb-slate"}>{label}</span>
+              </label>
+            ))}
+          </div>
+          <button
+            disabled={reqSending || reqItems.length === 0}
+            onClick={sendRequest}
+            className="mt-3 w-full rounded-xl bg-bbb-strong px-3 py-2 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50"
+          >{reqSending ? "Sending…" : `Request ${reqItems.length || ""} selected item${reqItems.length === 1 ? "" : "s"} by email`}</button>
+          {reqMsg && <p className={`mt-2 text-xs font-semibold ${reqMsg.startsWith("✓") ? "text-green-700" : "text-red-600"}`}>{reqMsg}</p>}
         </div>
         <div className="rounded-2xl bg-bbb-bg p-4">
           <div className="mb-2 flex items-center justify-between">

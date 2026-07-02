@@ -105,3 +105,39 @@ export async function listRequestsByStatus(statuses: string[]) {
     .in("status", statuses).order("created_at", { ascending: false });
   return data ?? [];
 }
+
+/** Email a buddy a checklist of the selected documents/items, asking them to
+ *  reply to the email with them. Replies route to the support inbox. */
+export async function requestBuddyDocuments(buddyId: string, itemKeys: string[]) {
+  const p = await admin(); if (!p) return { error: "Not authorised" };
+  if (!itemKeys?.length) return { error: "Select at least one item to request." };
+
+  const { REQUESTABLE_ITEMS } = await import("./request-documents");
+  const { sendBrandedEmail } = await import("@/lib/notifications/notify");
+  const db = createAdminClient();
+
+  const { data: buddy } = await db
+    .from("buddy_profiles")
+    .select("id, profiles!buddy_profiles_id_fkey(full_name, email)")
+    .eq("id", buddyId).maybeSingle();
+  const email = (buddy as any)?.profiles?.email;
+  const name = (buddy as any)?.profiles?.full_name || "there";
+  if (!email) return { error: "This buddy has no email on file." };
+
+  const chosen = REQUESTABLE_ITEMS.filter(([k]) => itemKeys.includes(k));
+  if (!chosen.length) return { error: "No valid items selected." };
+
+  const support = process.env.SUPPORT_EMAIL || "support@backhomebuddy.ng";
+  const listHtml = chosen.map(([, label]) => `<li style="margin:6px 0;">${label}</li>`).join("");
+  const body =
+    `Hi ${name},<br><br>` +
+    `Thank you for applying to become a Backhome Buddy. To continue your verification, please <strong>reply to this email</strong> and attach or provide the following:` +
+    `<ul style="padding-left:18px;margin:14px 0;">${listHtml}</ul>` +
+    `Simply reply to this email with the items above. If anything is unclear, reply and ask — we're happy to help.<br><br>` +
+    `Thank you,<br>The Backhome Buddy Team`;
+
+  await sendBrandedEmail(email, "Action needed: complete your Backhome Buddy verification", body, undefined, support);
+
+  await db.from("audit_log").insert({ actor_id: p.id, action: "request_documents", target_id: buddyId, detail: { items: itemKeys } });
+  return { error: "", sent: chosen.length, to: email };
+}

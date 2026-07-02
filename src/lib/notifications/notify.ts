@@ -29,6 +29,23 @@ function emailHtml(title: string, body: string, link?: string) {
   </td></tr></table></body></html>`;
 }
 
+export async function sendBrandedEmail(to: string, subject: string, body: string, link?: string, replyTo?: string) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || !to) return; // email channel not configured — in-app only
+  try {
+    const payload: any = { from: FROM, to: [to], subject, html: emailHtml(subject, body, link) };
+    if (replyTo) payload.reply_to = replyTo;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
+  } catch (e) {
+    console.error("Email send error:", e);
+  }
+}
+
 async function sendEmail(to: string, subject: string, body: string, link?: string) {
   const key = process.env.RESEND_API_KEY;
   if (!key || !to) return; // email channel not configured — in-app only
