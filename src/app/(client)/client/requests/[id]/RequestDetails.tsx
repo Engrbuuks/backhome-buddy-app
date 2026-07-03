@@ -2,6 +2,7 @@
 import React from "react";
 import { Camera, FileText, Video } from "lucide-react";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
+import { RequestMessages } from "@/components/RequestMessages";
 import { formatClientMoney, formatDate } from "@/components/money";
 import { useState, useTransition } from "react";
 import { confirmCompletion } from "@/lib/requests/confirm-actions";
@@ -154,6 +155,8 @@ export default function RequestDetails({ request, charges = [] }: { request: any
               <div className="flex justify-between"><dt className="text-bbb-slate">Address</dt><dd className="font-semibold text-right">{request.recipient_address || "—"}</dd></div>
             </dl>
           </div>
+
+          <RequestMessages requestId={request.id} viewer="client" />
         </aside>
       </div>
     </div>

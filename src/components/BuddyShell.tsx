@@ -1,4 +1,5 @@
 "use client";
+import { NotificationBadge } from "@/components/NotificationBadge";
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -34,7 +35,7 @@ export function BuddyShell({ children, unreadCount = 0 }: { children: React.Reac
             const active = pathname?.startsWith(t.href);
             return (
               <Link key={t.href} href={t.href} className={`border-b-2 px-4 py-3 text-sm font-semibold ${active ? "border-bbb-strong text-bbb-charcoal" : "border-transparent text-bbb-slate hover:text-bbb-charcoal"}`}>
-                {t.label}{t.label === "Notifications" && unreadCount > 0 && <span className="ml-1.5 rounded-full bg-bbb-strong px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>}
+                {t.label}{t.label === "Notifications" && <NotificationBadge />}
               </Link>
             );
           })}

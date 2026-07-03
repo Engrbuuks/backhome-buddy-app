@@ -198,8 +198,11 @@ export async function sendMessageToClient(requestId: string, message: string) {
   const { data: req } = await db.from("requests").select("id, client_id, title").eq("id", requestId).maybeSingle();
   if (!req?.client_id) return { error: "This request has no client on file." };
 
+  // Post into the request's message thread so follow-ups live in one place.
+  await db.from("request_messages").insert({ request_id: requestId, sender: "staff", sender_id: p.id, content: text });
+
   const { notify } = await import("@/lib/notifications/notify");
-  await notify(req.client_id, `A message about "${req.title}"`, text, `/client/requests/${requestId}`);
+  await notify(req.client_id, `New message about "${req.title}"`, text.slice(0, 160), `/client/requests/${requestId}`);
   await db.from("audit_log").insert({ actor_id: p.id, action: "message_client", target_id: requestId, detail: { chars: text.length } });
   return { error: "" };
 }

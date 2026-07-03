@@ -9,6 +9,8 @@ import {
 LogOut, Menu, X, BookOpen,
 } from "lucide-react";
 
+import { NotificationBadge } from "@/components/NotificationBadge";
+
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/requests", label: "Requests Queue", icon: Inbox },
@@ -51,6 +53,7 @@ export function AdminShell({ title, children }: { title: string; children: React
                     className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${active ? "bg-bbb-strong text-white" : "text-bbb-slate hover:bg-bbb-bg hover:text-bbb-charcoal"}`}>
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{label}</span>
+                    {href === "/admin/notifications" && <NotificationBadge />}
                   </Link>
                 );
               })}

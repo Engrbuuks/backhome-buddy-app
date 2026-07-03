@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { Bell, Home, LifeBuoy, LogOut, Menu, PlusCircle, Settings, UsersRound } from "lucide-react";
 import { signOut } from "@/lib/auth/actions";
 
+import { NotificationBadge } from "@/components/NotificationBadge";
+
 const NAV = [
   { label: "Dashboard", href: "/client/dashboard", icon: Home },
   { label: "New Request", href: "/client/requests/new", icon: PlusCircle },
@@ -31,7 +33,7 @@ export function ClientShell({ children, unreadCount = 0 }: { children: React.Rea
           return (
             <Link key={href} href={href} onClick={() => setMobileOpen(false)}
               className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-semibold transition ${active ? "bg-bbb-soft text-bbb-dark" : "text-bbb-slate hover:bg-white hover:text-bbb-charcoal"}`}>
-              <Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span>{label === "Notifications" && unreadCount > 0 && <span className="ml-auto rounded-full bg-bbb-strong px-2 py-0.5 text-[10px] font-bold text-white">{unreadCount}</span>}
+              <Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span>{label === "Notifications" && <NotificationBadge />}
             </Link>
           );
         })}
