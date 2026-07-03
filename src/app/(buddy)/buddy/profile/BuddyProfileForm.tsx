@@ -8,6 +8,8 @@ import { updateMyProfile } from "@/lib/client/actions";
 import { updateBuddySkills, updateBuddyDetails } from "@/lib/buddy/actions";
 import { PassportPhotoUploader } from "@/components/PassportPhotoUploader";
 
+const GRAD_YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => new Date().getFullYear() - i);
+
 function initials(name?: string) {
   if (!name) return "B";
   return name.split(" ").filter(Boolean).slice(0, 2).map((n) => n[0]?.toUpperCase()).join("");
@@ -84,6 +86,32 @@ export default function BuddyProfileForm({ profile, buddy, photoUrl }: { profile
         <div>
           <label className="mb-1 block text-sm font-bold text-bbb-charcoal">Experience</label>
           <textarea name="experience" defaultValue={buddy?.experience ?? ""} rows={3} className="w-full rounded-xl border border-bbb-border bg-white p-3 text-sm outline-none focus:border-bbb-strong" placeholder="Briefly describe relevant experience." />
+        </div>
+        <p className="pt-1 text-sm font-extrabold">Education</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-bold text-bbb-charcoal">Highest level of education</label>
+            <select name="education_level" defaultValue={buddy?.education_level ?? ""} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong">
+              <option value="">Select level</option>
+              <option value="PhD">PhD</option>
+              <option value="MSc">MSc</option>
+              <option value="BSc">BSc</option>
+              <option value="HND">HND</option>
+              <option value="OND">OND</option>
+              <option value="SSCE">SSCE</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-bold text-bbb-charcoal">Year of graduation</label>
+            <select name="year_of_graduation" defaultValue={buddy?.year_of_graduation ?? ""} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong">
+              <option value="">Select year</option>
+              {GRAD_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Course of study" name="course_of_study" defaultValue={buddy?.course_of_study ?? ""} placeholder="e.g. Estate Management" />
+          <Field label="School attended" name="school_attended" defaultValue={buddy?.school_attended ?? ""} placeholder="e.g. University of Lagos" />
         </div>
         <div className="flex flex-wrap gap-5">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="has_smartphone" defaultChecked={Boolean(buddy?.has_smartphone)} className="h-4 w-4 accent-[#079516]" /> I have a smartphone</label>

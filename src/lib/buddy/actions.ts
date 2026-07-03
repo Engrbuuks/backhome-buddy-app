@@ -69,6 +69,10 @@ export async function updateBuddyDetails(_prev: unknown, formData: FormData) {
     coverage_areas: coverage.length ? coverage : null,
     has_smartphone: formData.get("has_smartphone") === "on",
     can_drive: formData.get("can_drive") === "on",
+    education_level: g("education_level") || null,
+    course_of_study: g("course_of_study") || null,
+    year_of_graduation: /^\d{4}$/.test(g("year_of_graduation")) ? parseInt(g("year_of_graduation"), 10) : null,
+    school_attended: g("school_attended") || null,
   };
   const supabase = createClient();
   const { error } = await supabase.from("buddy_profiles").upsert(update);

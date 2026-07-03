@@ -13,7 +13,7 @@ export async function listBuddies() {
   if (!(await admin())) return [];
   const db = createAdminClient();
   const { data } = await db.from("buddy_profiles")
-    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
+    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
     .order("created_at", { ascending: false });
   const buddies = data ?? [];
   // Short-lived signed URLs for vetting documents (admin-only view).

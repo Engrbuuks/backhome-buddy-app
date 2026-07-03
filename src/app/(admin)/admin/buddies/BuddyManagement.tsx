@@ -75,6 +75,8 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           <Row label="City" value={b.city} />
           <Row label="Coverage" value={b.coverage_areas} />
           <Row label="Occupation" value={b.occupation} />
+          <Row label="Education" value={[b.education_level, b.course_of_study].filter(Boolean).join(" — ")} />
+          <Row label="School" value={[b.school_attended, b.year_of_graduation].filter(Boolean).join(", ")} />
           <Row label="Availability" value={b.availability?.replace(/_/g, " ")} />
           <Row label="Smartphone" value={b.has_smartphone ? "Yes" : "No"} />
           <Row label="Can ride/drive" value={`${b.can_drive ? "Yes" : "No"}${b.has_drivers_license ? " (licensed)" : ""}`} />

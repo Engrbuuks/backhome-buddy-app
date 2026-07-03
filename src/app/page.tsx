@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/roles";
-import { HOME_FOR } from "@/lib/auth/actions";
+import { HOME_FOR } from "@/lib/auth/roles-home";
 import { PublicChatWidget } from "@/components/PublicChatWidget";
 
 // This page reads cookies (auth) and search params (?code= from email

@@ -13,6 +13,8 @@ const NG_STATES = [
   "Sokoto","Taraba","Yobe","Zamfara",
 ];
 
+const GRAD_YEARS = Array.from({ length: new Date().getFullYear() - 1969 }, (_, i) => new Date().getFullYear() - i);
+
 const STEPS = ["Your details", "Where you operate", "Declarations"];
 
 function SubmitBtn() {
@@ -42,6 +44,7 @@ export default function ApplyForm() {
     date_of_birth: "", nin: "",
     address: "", state: "", lga: "", city: "", coverage_areas: "",
     occupation: "", availability: "", experience: "", skills: "",
+    education_level: "", course_of_study: "", year_of_graduation: "", school_attended: "",
     criminal_record: "", criminal_record_details: "",
   });
   const [checks, setChecks] = useState({ has_smartphone: false, can_drive: false, has_drivers_license: false, consent_background_checks: false, consent_data_processing: false, declare_true: false });
@@ -166,6 +169,25 @@ export default function ApplyForm() {
             </SelectField>
           </div>
           <TextAreaField label="Relevant experience (optional)" name="experience" rows={3} value={v.experience} onChange={set("experience")} placeholder="Anything that shows you can handle tasks reliably — logistics, real estate, admin, field work…" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField label="Highest level of education" name="education_level" value={v.education_level} onChange={set("education_level")}>
+              <option value="">Select level</option>
+              <option value="PhD">PhD</option>
+              <option value="MSc">MSc</option>
+              <option value="BSc">BSc</option>
+              <option value="HND">HND</option>
+              <option value="OND">OND</option>
+              <option value="SSCE">SSCE</option>
+            </SelectField>
+            <SelectField label="Year of graduation" name="year_of_graduation" value={v.year_of_graduation} onChange={set("year_of_graduation")}>
+              <option value="">Select year</option>
+              {GRAD_YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </SelectField>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Course of study" name="course_of_study" value={v.course_of_study} onChange={set("course_of_study")} placeholder="e.g. Estate Management" />
+            <Field label="School attended" name="school_attended" value={v.school_attended} onChange={set("school_attended")} placeholder="e.g. University of Lagos" />
+          </div>
           <Field label="Skills (comma-separated, optional)" name="skills" value={v.skills} onChange={set("skills")} placeholder="property verification, deliveries, document processing" />
           <div className="space-y-2 rounded-2xl border border-bbb-border bg-bbb-bg p-4">
             <Check name="has_smartphone" checked={checks.has_smartphone} onChange={(x) => setChecks((c) => ({ ...c, has_smartphone: x }))} label={<><span className="font-semibold">I own a smartphone with a working camera</span> — required: every task ends with photo/video proof.</>} />

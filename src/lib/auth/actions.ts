@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import type { UserRole } from "@/types/db";
+import { HOME_FOR } from "@/lib/auth/roles-home";
 
 /** Simple per-instance rate limiter for auth endpoints. Good against casual
  *  brute force in dev/single-instance; for serverless scale, swap for a
@@ -15,11 +16,7 @@ function rateLimited(key: string, max = 8, windowMs = 60_000): boolean {
   return a.n > max;
 }
 
-export const HOME_FOR: Record<UserRole, string> = {
-  client: "/client/dashboard",
-  buddy: "/buddy/dashboard",
-  admin: "/admin/dashboard",
-};
+
 
 /** Sign in, then route to the portal matching the user's role. */
 export async function signIn(_prev: unknown, formData: FormData) {
@@ -89,6 +86,11 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   const occupation = String(formData.get("occupation") || "").slice(0, 120).trim();
   const experience = String(formData.get("experience") || "").slice(0, 1500).trim();
   const availability = String(formData.get("availability") || "").slice(0, 40).trim();
+  const educationLevel = String(formData.get("education_level") || "").slice(0, 20).trim();
+  const courseOfStudy = String(formData.get("course_of_study") || "").slice(0, 120).trim();
+  const yearOfGraduationRaw = String(formData.get("year_of_graduation") || "").trim();
+  const yearOfGraduation = /^\d{4}$/.test(yearOfGraduationRaw) ? parseInt(yearOfGraduationRaw, 10) : null;
+  const schoolAttended = String(formData.get("school_attended") || "").slice(0, 160).trim();
   const hasSmartphone = formData.get("has_smartphone") === "on";
   const canDrive = formData.get("can_drive") === "on";
   const hasLicense = formData.get("has_drivers_license") === "on";
@@ -137,6 +139,8 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
     id: userId, vetting: "under_review", skills,
     city, date_of_birth: dob, nin, address, state: stateName, lga,
     coverage_areas: coverage, occupation, experience, availability,
+    education_level: educationLevel || null, course_of_study: courseOfStudy || null,
+    year_of_graduation: yearOfGraduation, school_attended: schoolAttended || null,
     has_smartphone: hasSmartphone, can_drive: canDrive, has_drivers_license: hasLicense,
     criminal_record: criminalRecord === "yes", criminal_record_details: criminalDetails || null,
     consent_background_checks: consentChecks, consent_data_processing: consentData,
