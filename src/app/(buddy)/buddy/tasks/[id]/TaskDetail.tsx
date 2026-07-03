@@ -20,8 +20,12 @@ export default function TaskDetail({ task }: { task: any }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const onFilesPicked = (list: FileList | null, live: boolean) => {
+    const picked = Array.from(list ?? []);
+    if (picked.length === 0) return;
     setLiveMode(live);
-    setFiles(Array.from(list ?? []));
+    setFiles(picked);
+    // Auto-upload right away so nothing is lost if the buddy forgets to tap Upload.
+    void uploadFiles(picked, live);
   };
 
   /** Get the device's current location at capture time. Resolves with null if
@@ -53,12 +57,11 @@ export default function TaskDetail({ task }: { task: any }) {
     } catch { return file; }
   }
 
-  async function uploadSelected() {
-    if (files.length === 0) return;
+  async function uploadFiles(toUpload: File[], live: boolean) {
+    if (toUpload.length === 0) return;
     setUploading(true); setUploadError(""); setGeoStatus("");
-    // Capture location once at submit time (all files captured in this session).
     let geo: { lat: number; lng: number; accuracy: number } | null = null;
-    if (liveMode) {
+    if (live) {
       setGeoStatus("Getting your location…");
       geo = await getLocation();
       setGeoStatus(geo ? `Location captured (±${Math.round(geo.accuracy)}m)` : "Location unavailable — proof will be marked without location.");
@@ -66,7 +69,7 @@ export default function TaskDetail({ task }: { task: any }) {
     const capturedAt = new Date().toISOString();
     const { uploadToR2 } = await import("@/lib/storage/upload-client");
     const done = [...uploaded];
-    for (const f of files) {
+    for (const f of toUpload) {
       const kind = f.type.startsWith("video") ? "video" : "photo";
       const payload = kind === "photo" ? await compressImage(f) : f;
       const ext = kind === "photo" ? "jpg" : (f.name.split(".").pop() || "mp4");
@@ -77,7 +80,7 @@ export default function TaskDetail({ task }: { task: any }) {
           path: key, kind,
           lat: geo?.lat, lng: geo?.lng, accuracy: geo?.accuracy,
           capturedAt,
-          method: liveMode ? "live" : "upload",
+          method: live ? "live" : "upload",
         });
       } catch (err: any) {
         setUploadError(`${f.name}: ${err?.message || "upload failed"}`); setUploading(false); return;
@@ -145,15 +148,14 @@ export default function TaskDetail({ task }: { task: any }) {
               onChange={(e) => onFilesPicked(e.target.files, false)}
               className="hidden"
             />
-            {files.length > 0 && <p className="mt-2 text-xs font-semibold text-bbb-charcoal">{files.length} file{files.length > 1 ? "s" : ""} ready {liveMode ? "(live capture)" : "(upload)"}</p>}
+            {uploading && <p className="mt-2 text-xs font-semibold text-bbb-strong">Uploading…</p>}
             {geoStatus && <p className="mt-1 text-xs font-semibold text-bbb-strong">{geoStatus}</p>}
-            {files.length > 0 && (
-              <button type="button" disabled={uploading} onClick={uploadSelected} className="mt-2 rounded-xl bg-bbb-charcoal px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{uploading ? "Uploading..." : `Upload ${files.length} file${files.length > 1 ? "s" : ""}`}</button>
-            )}
-            {uploadError && <p className="mt-2 text-xs font-semibold text-red-600">{uploadError}</p>}
-            {uploaded.length > 0 && <p className="mt-2 text-xs font-semibold text-bbb-dark">{uploaded.length} file{uploaded.length > 1 ? "s" : ""} attached ✓</p>}
+            {uploadError && <p className="mt-2 text-xs font-semibold text-red-600">{uploadError} — please try again.</p>}
+            {uploaded.length > 0 && <p className="mt-2 text-xs font-semibold text-green-700">{uploaded.length} file{uploaded.length > 1 ? "s" : ""} attached ✓</p>}
           </div>
-          <button className="mt-3 h-12 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">Submit proof for review</button>
+          <button disabled={uploading} className="mt-3 h-12 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">
+            {uploading ? "Wait — finishing upload…" : uploaded.length === 0 ? "Submit report (no photo attached)" : "Submit proof for review"}
+          </button>
         </form>
       )}
 

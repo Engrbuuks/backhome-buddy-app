@@ -53,7 +53,8 @@ export async function presignDownloadMany(bucket: R2Bucket, keys: string[], expi
   const out = new Map<string, string>();
   await Promise.all(
     Array.from(new Set(keys.filter(Boolean))).map(async (k) => {
-      try { out.set(k, await presignDownload(bucket, k, expiresIn)); } catch {}
+      try { out.set(k, await presignDownload(bucket, k, expiresIn)); }
+      catch (e) { console.error(`R2 presignDownload failed for ${bucket}/${k}:`, e instanceof Error ? e.message : e); }
     })
   );
   return out;

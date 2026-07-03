@@ -9,7 +9,15 @@ function fmt(ts?: string) {
 
 export function ProofMedia({ proofs }: { proofs: any[] }) {
   const media = (proofs ?? []).filter((p) => p.signedUrl);
-  if (media.length === 0) return null;
+  // Proof rows that reference a file but whose URL couldn't be generated — surface
+  // this instead of silently showing nothing, so a broken file is diagnosable.
+  const brokenCount = (proofs ?? []).filter((p) => p.file_url && !p.signedUrl && ["photo", "video"].includes(p.kind)).length;
+  if (media.length === 0) {
+    if (brokenCount > 0) {
+      return <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-700">⚠ {brokenCount} media file{brokenCount > 1 ? "s" : ""} attached but couldn&apos;t be loaded (storage/signing issue). The file reference exists — this is not a &quot;no upload&quot; case.</p>;
+    }
+    return null;
+  }
   return (
     <div className="mt-4 grid gap-3 sm:grid-cols-3">
       {media.map((p) => {
