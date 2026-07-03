@@ -1,14 +1,15 @@
-/** Documents/items an admin can request a buddy to send by replying to the email.
- *  Separate from VETTING_CHECKS (which are admin actions like interviews). */
+/** Documents/items an admin can request a buddy to provide IN THEIR PORTAL.
+ *  Kept aligned with the buddy Verification page so every requested item has a
+ *  real place to be uploaded/entered (ID, proof of address, PCC uploads;
+ *  guarantors, next of kin, bank details forms). */
 export const REQUESTABLE_ITEMS: ReadonlyArray<readonly [string, string]> = [
-  ["id_doc", "A clear photo/scan of your government-issued ID (NIN slip, driver's licence, or international passport)"],
-  ["nin", "Your National Identification Number (NIN)"],
-  ["utility_bill", "A recent utility bill or proof of address (not older than 3 months)"],
-  ["passport_photo", "A recent passport-style photograph"],
-  ["pcc", "Your Police Character Certificate (or the reference number if in progress)"],
-  ["guarantor1", "Guarantor 1's details: full name, phone, address, occupation and relationship to you"],
-  ["guarantor2", "Guarantor 2's details: full name, phone, address, occupation and relationship to you"],
-  ["next_of_kin", "Next of kin details: full name, phone, address and relationship"],
-  ["bank_details", "Your bank details for payouts: bank name, account number and account name"],
-  ["cv", "Your CV / résumé"],
+  ["passport_photo", "Passport photograph: a recent, clear passport-style photo (becomes your profile photo)"],
+  ["id_doc", "Government-issued ID: upload a clear photo/scan (NIN slip, driver's licence, or international passport)"],
+  ["nin_slip", "NIN slip: upload a clear photo of your NIN slip, and enter your NIN number"],
+  ["utility_bill", "Proof of address: a recent utility bill (not older than 3 months)"],
+  ["pcc", "Police Character Certificate: upload the certificate (or note the reference if in progress)"],
+  ["cv", "CV / résumé: upload as a PDF or a clear photo"],
+  ["guarantors", "Two guarantors: full name, phone, address, occupation and relationship for each"],
+  ["next_of_kin", "Next of kin: full name, phone and relationship"],
+  ["bank_details", "Payout bank details: bank name, account number and account name (under the Payout Details tab)"],
 ];

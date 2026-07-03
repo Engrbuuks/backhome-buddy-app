@@ -12,6 +12,9 @@ const DOC_FIELDS: Record<string, string> = {
   id_doc: "id_doc_path",
   utility_bill: "utility_bill_path",
   pcc: "pcc_path",
+  passport_photo: "passport_photo_path",
+  nin_slip: "nin_slip_path",
+  cv: "cv_path",
 };
 
 export async function getMyVetting() {
@@ -20,7 +23,7 @@ export async function getMyVetting() {
   const db = createAdminClient();
   const { data } = await db
     .from("buddy_profiles")
-    .select("id, vetting, id_doc_type, id_doc_path, utility_bill_path, pcc_path, guarantors, next_of_kin, bank_name, bank_account_number, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name)")
+    .select("id, vetting, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, nin, guarantors, next_of_kin, bank_name, bank_account_number, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name)")
     .eq("id", p.id)
     .maybeSingle();
   return data;
@@ -117,4 +120,31 @@ export async function signNda(fullName: string) {
   await db.from("audit_log").insert({ actor_id: p.id, action: "nda_signed", target_id: p.id, detail: { name, version: NDA_VERSION } });
   revalidatePath("/buddy/verification");
   return { error: "" };
+}
+
+/** Buddy's own profile summary for their dashboard: name, a signed URL for the
+ *  passport photo (if uploaded), and their guarantors + next of kin. */
+export async function getMyProfileSummary() {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "buddy") return null;
+  const db = createAdminClient();
+  const { data } = await db
+    .from("buddy_profiles")
+    .select("id, passport_photo_path, guarantors, next_of_kin, vetting, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
+    .eq("id", p.id).maybeSingle();
+  if (!data) return null;
+
+  let photoUrl: string | undefined;
+  if ((data as any).passport_photo_path) {
+    try {
+      const { r2Configured, presignDownload } = await import("@/lib/storage/r2");
+      if (r2Configured()) {
+        photoUrl = await presignDownload("vetting", (data as any).passport_photo_path, 3600);
+      } else {
+        const { data: s } = await db.storage.from("vetting").createSignedUrl((data as any).passport_photo_path, 3600);
+        photoUrl = s?.signedUrl;
+      }
+    } catch {}
+  }
+  return { ...(data as any), photoUrl };
 }

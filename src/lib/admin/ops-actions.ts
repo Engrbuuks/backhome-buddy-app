@@ -13,11 +13,11 @@ export async function listBuddies() {
   if (!(await admin())) return [];
   const db = createAdminClient();
   const { data } = await db.from("buddy_profiles")
-    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
+    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
     .order("created_at", { ascending: false });
   const buddies = data ?? [];
   // Short-lived signed URLs for vetting documents (admin-only view).
-  const paths = buddies.flatMap((b: any) => [b.id_doc_path, b.utility_bill_path, b.pcc_path]).filter(Boolean) as string[];
+  const paths = buddies.flatMap((b: any) => [b.id_doc_path, b.utility_bill_path, b.pcc_path, b.passport_photo_path, b.nin_slip_path, b.cv_path]).filter(Boolean) as string[];
   if (paths.length) {
     const urlOf = new Map<string, string | undefined>();
     const { r2Configured, presignDownloadMany } = await import("@/lib/storage/r2");
@@ -34,6 +34,9 @@ export async function listBuddies() {
       b.id_doc_url = b.id_doc_path ? urlOf.get(b.id_doc_path) : undefined;
       b.utility_bill_url = b.utility_bill_path ? urlOf.get(b.utility_bill_path) : undefined;
       b.pcc_url = b.pcc_path ? urlOf.get(b.pcc_path) : undefined;
+      b.passport_photo_url = b.passport_photo_path ? urlOf.get(b.passport_photo_path) : undefined;
+      b.nin_slip_url = b.nin_slip_path ? urlOf.get(b.nin_slip_path) : undefined;
+      b.cv_url = b.cv_path ? urlOf.get(b.cv_path) : undefined;
     }
   }
   return buddies;
@@ -123,7 +126,7 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
   if (!itemKeys?.length) return { error: "Select at least one item to request." };
 
   const { REQUESTABLE_ITEMS } = await import("./request-documents");
-  const { sendBrandedEmail } = await import("@/lib/notifications/notify");
+  const { sendBrandedEmail, notify } = await import("@/lib/notifications/notify");
   const db = createAdminClient();
 
   const { data: buddy } = await db
@@ -141,12 +144,15 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
   const listHtml = chosen.map(([, label]) => `<li style="margin:6px 0;">${label}</li>`).join("");
   const body =
     `Hi ${name},<br><br>` +
-    `Thank you for applying to become a Backhome Buddy. To continue your verification, please <strong>reply to this email</strong> and attach or provide the following:` +
+    `Thank you for applying to become a Backhome Buddy. To continue your verification, please log in to your portal and provide the following in your Verification page:` +
     `<ul style="padding-left:18px;margin:14px 0;">${listHtml}</ul>` +
-    `Simply reply to this email with the items above. If anything is unclear, reply and ask — we're happy to help.<br><br>` +
+    `Click the button below to open your Verification page and upload them securely. If anything is unclear, just reply to this email — we're happy to help.<br><br>` +
     `Thank you,<br>The Backhome Buddy Team`;
 
-  await sendBrandedEmail(email, "Action needed: complete your Backhome Buddy verification", body, undefined, support);
+  // Link the buddy straight to their in-app verification/upload page.
+  await sendBrandedEmail(email, "Action needed: upload your verification documents", body, "/buddy/vetting", support);
+  await notify(buddyId, "Documents needed for verification",
+    `Please upload: ${chosen.map(([, l]) => l.split(":")[0]).join(", ")}.`, "/buddy/vetting");
 
   await db.from("audit_log").insert({ actor_id: p.id, action: "request_documents", target_id: buddyId, detail: { items: itemKeys } });
   return { error: "", sent: chosen.length, to: email };

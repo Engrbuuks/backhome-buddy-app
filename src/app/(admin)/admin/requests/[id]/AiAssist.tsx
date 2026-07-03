@@ -2,13 +2,14 @@
 import React, { useState, useTransition } from "react";
 import { Sparkles } from "lucide-react";
 import { ErrorState } from "@/components/StateBlocks";
-import { aiDraftReport, aiTriageRequest, aiCheckProofs, saveReport } from "@/lib/ai/assist-actions";
+import { aiDraftReport, aiTriageRequest, aiCheckProofs, saveReport, sendMessageToClient } from "@/lib/ai/assist-actions";
 
 /** AI assists on the admin request page. AI drafts — the admin approves.
  *  Nothing is sent to the client without an explicit human action. */
 export default function AiAssist({ request }: { request: any }) {
   const [error, setError] = useState("");
   const [triage, setTriage] = useState("");
+  const [triageSent, setTriageSent] = useState(false);
   const [proofCheck, setProofCheck] = useState("");
   const [report, setReport] = useState(request.report ?? "");
   const [reportSaved, setReportSaved] = useState(false);
@@ -57,10 +58,23 @@ export default function AiAssist({ request }: { request: any }) {
       {triage && (
         <div className="mt-4 rounded-2xl bg-bbb-bg p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Triage</p>
+            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Message to client (edit, then send)</p>
             <button onClick={() => navigator.clipboard?.writeText(triage)} className="text-xs font-bold text-bbb-strong">Copy</button>
           </div>
-          <p className="mt-2 whitespace-pre-line text-sm leading-6">{triage}</p>
+          <textarea
+            value={triage}
+            onChange={(e) => { setTriage(e.target.value); setTriageSent(false); }}
+            rows={8}
+            className="mt-2 w-full rounded-xl border border-bbb-border bg-white p-3 text-sm leading-6 outline-none focus:border-bbb-strong"
+          />
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              disabled={pending || !triage.trim()}
+              onClick={() => start(async () => { setError(""); const r = await sendMessageToClient(request.id, triage); if (r?.error) setError(r.error); else setTriageSent(true); })}
+              className="rounded-xl bg-bbb-strong px-4 py-2 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50"
+            >{pending ? "Sending…" : "Send to client"}</button>
+            {triageSent && <span className="text-sm font-semibold text-green-700">Sent — the client is notified by app &amp; email ✓</span>}
+          </div>
         </div>
       )}
 

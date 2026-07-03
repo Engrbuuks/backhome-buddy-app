@@ -196,7 +196,10 @@ export default function VettingCenter({ v }: { v: any }) {
         <p className="mb-3 font-display text-base font-extrabold">Your progress</p>
         <ul className="space-y-2">
           <Item done={Boolean(v.nda_signed_at)} label="Confidentiality Agreement signed" />
+          <Item done={Boolean(v.passport_photo_path)} label="Passport photograph uploaded" />
           <Item done={Boolean(v.id_doc_path)} label="Government ID uploaded" />
+          <Item done={Boolean(v.nin_slip_path)} label="NIN slip uploaded" />
+          <Item done={Boolean(v.cv_path)} label="CV uploaded" />
           <Item done={Boolean(v.utility_bill_path)} label="Proof of address uploaded (utility bill)" />
           <Item done={hasGuarantors} label="Two guarantors provided" />
           <Item done={Boolean(v.pcc_path)} label="Police Character Certificate uploaded" />
@@ -216,6 +219,16 @@ export default function VettingCenter({ v }: { v: any }) {
         <DocUpload buddyId={v.id} kind="pcc" title="Police Character Certificate"
           hint="Obtainable from the Nigeria Police (possintl.npf.gov.ng or your state CID). Upload the certificate or the application receipt while you wait for issuance."
           currentPath={v.pcc_path} />
+
+        <DocUpload buddyId={v.id} kind="passport_photo" title="Passport photograph"
+          hint="A recent, clear passport-style photo of your face on a plain background. This becomes your profile photo."
+          currentPath={v.passport_photo_path} />
+        <DocUpload buddyId={v.id} kind="nin_slip" title="NIN slip"
+          hint="Upload a clear photo of your NIN slip. (Also enter your NIN number below.)"
+          currentPath={v.nin_slip_path} />
+        <DocUpload buddyId={v.id} kind="cv" title="CV / résumé"
+          hint="Upload your CV as a PDF or a clear photo."
+          currentPath={v.cv_path} />
 
         <form action={gAction} className="space-y-4 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <div className="flex items-center justify-between gap-3">

@@ -186,3 +186,20 @@ Next of kin: ${(b.next_of_kin as any)?.name ?? "—"}
 Bank account name: ${b.bank_account_name ?? "—"} (legal name: ${b.profiles?.full_name ?? "—"})`;
   return aiGenerate(system, user);
 }
+
+/** Send an (admin-edited) message to the request's client. Delivers an in-app
+ *  notification + email, linking them to their request. Used to send the triage
+ *  questions or any custom message. The admin edits/approves before sending. */
+export async function sendMessageToClient(requestId: string, message: string) {
+  const p = await admin(); if (!p) return { error: "Not authorized." };
+  const text = String(message || "").trim();
+  if (text.length < 2) return { error: "Message is empty." };
+  const db = createAdminClient();
+  const { data: req } = await db.from("requests").select("id, client_id, title").eq("id", requestId).maybeSingle();
+  if (!req?.client_id) return { error: "This request has no client on file." };
+
+  const { notify } = await import("@/lib/notifications/notify");
+  await notify(req.client_id, `A message about "${req.title}"`, text, `/client/requests/${requestId}`);
+  await db.from("audit_log").insert({ actor_id: p.id, action: "message_client", target_id: requestId, detail: { chars: text.length } });
+  return { error: "" };
+}
