@@ -3,7 +3,7 @@ import React, { useState, useTransition, useMemo } from "react";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
-import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments } from "@/lib/admin/ops-actions";
+import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction } from "@/lib/admin/ops-actions";
 import { aiScreenBuddy } from "@/lib/ai/assist-actions";
 import { BuddyFilterBar, applyBuddyFilters, EMPTY_BUDDY_FILTER, type BuddyFilterValue } from "./BuddyFilters";
 import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
@@ -38,6 +38,14 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
   const [reqItems, setReqItems] = useState<string[]>([]);
   const [reqSending, setReqSending] = useState(false);
   const [reqMsg, setReqMsg] = useState("");
+  const [actionMsg, setActionMsg] = useState("");
+  const [actionBusy, setActionBusy] = useState("");
+  const sendAction = async (action: "nda" | "guarantors") => {
+    setActionBusy(action); setActionMsg("");
+    const res = await requestBuddyAction(b.id, action);
+    setActionBusy("");
+    setActionMsg(res.error ? res.error : `✓ ${action === "nda" ? "NDA request" : "Guarantor request"} emailed to ${res.to}`);
+  };
   const toggleReq = (k: string) => setReqItems((prev) => prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]);
   const sendRequest = async () => {
     setReqSending(true); setReqMsg("");
@@ -134,6 +142,21 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           {!allDone && b.vetting !== "approved" && (
             <p className="mt-3 rounded-lg bg-white p-2 text-xs text-bbb-slate">Approval unlocks when all checks are ticked.</p>
           )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={actionBusy === "nda" || Boolean(b.nda_signed_at)}
+              onClick={() => sendAction("nda")}
+              className="rounded-lg border border-bbb-strong px-3 py-1.5 text-xs font-bold text-bbb-strong hover:bg-bbb-bg disabled:opacity-50"
+            >{b.nda_signed_at ? "NDA already signed ✓" : actionBusy === "nda" ? "Sending…" : "Email: sign NDA"}</button>
+            <button
+              type="button"
+              disabled={actionBusy === "guarantors"}
+              onClick={() => sendAction("guarantors")}
+              className="rounded-lg border border-bbb-strong px-3 py-1.5 text-xs font-bold text-bbb-strong hover:bg-bbb-bg disabled:opacity-50"
+            >{actionBusy === "guarantors" ? "Sending…" : "Email: request guarantor details"}</button>
+          </div>
+          {actionMsg && <p className={`mt-2 text-xs font-semibold ${actionMsg.startsWith("✓") ? "text-green-700" : "text-red-600"}`}>{actionMsg}</p>}
         </div>
 
         <div className="rounded-2xl bg-bbb-bg p-4">

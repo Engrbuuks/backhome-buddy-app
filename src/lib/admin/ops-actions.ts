@@ -142,3 +142,53 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
   await db.from("audit_log").insert({ actor_id: p.id, action: "request_documents", target_id: buddyId, detail: { items: itemKeys } });
   return { error: "", sent: chosen.length, to: email };
 }
+
+/** Email a buddy asking them to complete an in-app onboarding ACTION (sign the
+ *  NDA, or fill guarantor/next-of-kin details), with a button linking straight
+ *  to their portal. Unlike requestBuddyDocuments (reply-to-email), these are
+ *  actions the buddy completes inside the app. */
+export async function requestBuddyAction(buddyId: string, action: "nda" | "guarantors") {
+  const p = await admin(); if (!p) return { error: "Not authorised" };
+  const { sendBrandedEmail } = await import("@/lib/notifications/notify");
+  const { notify } = await import("@/lib/notifications/notify");
+  const db = createAdminClient();
+
+  const { data: buddy } = await db
+    .from("buddy_profiles")
+    .select("id, profiles!buddy_profiles_id_fkey(full_name, email)")
+    .eq("id", buddyId).maybeSingle();
+  const email = (buddy as any)?.profiles?.email;
+  const name = (buddy as any)?.profiles?.full_name || "there";
+  if (!email) return { error: "This buddy has no email on file." };
+
+  const support = process.env.SUPPORT_EMAIL || "support@backhomebuddy.ng";
+  let subject: string, body: string, link: string;
+
+  if (action === "nda") {
+    subject = "Action needed: sign your Backhome Buddy Confidentiality Agreement";
+    link = "/buddy/vetting";
+    body =
+      `Hi ${name},<br><br>` +
+      `Before your Backhome Buddy application can be approved, you need to read and sign our <strong>Confidentiality Agreement (NDA)</strong>. ` +
+      `It only takes a minute — click the button below, log in, read the agreement, type your name and sign.<br><br>` +
+      `Your account cannot be approved until this is signed.<br><br>Thank you,<br>The Backhome Buddy Team`;
+  } else {
+    subject = "Action needed: add your guarantor details";
+    link = "/buddy/vetting";
+    body =
+      `Hi ${name},<br><br>` +
+      `To continue your Backhome Buddy verification, please add your <strong>two guarantors</strong> and <strong>next of kin</strong> details. ` +
+      `Click the button below, log in, and fill in the guarantor section of your verification page.<br><br>` +
+      `Please provide, for each guarantor: full name, phone number, address, occupation, and their relationship to you.<br><br>` +
+      `Thank you,<br>The Backhome Buddy Team`;
+  }
+
+  await sendBrandedEmail(email, subject, body, link, support);
+  // Also drop an in-app notification for the buddy.
+  await notify(buddyId, action === "nda" ? "Please sign your NDA" : "Please add guarantor details",
+    action === "nda" ? "Sign the Confidentiality Agreement to continue your approval." : "Add your guarantors and next of kin to continue.",
+    "/buddy/vetting");
+
+  await db.from("audit_log").insert({ actor_id: p.id, action: "request_action", target_id: buddyId, detail: { action } });
+  return { error: "", sent: true, to: email, action };
+}
