@@ -5,7 +5,6 @@ import { StatusPill } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { startTask, submitProof } from "@/lib/buddy/task-actions";
-import { createClient } from "@/lib/supabase/client";
 import { ProofMedia } from "@/components/ProofMedia";
 
 export default function TaskDetail({ task }: { task: any }) {
@@ -13,9 +12,25 @@ export default function TaskDetail({ task }: { task: any }) {
   const [pending, start] = useTransition();
   const [state, formAction] = useFormState(submitProof, { error: "" });
   const [files, setFiles] = useState<File[]>([]);
-  const [uploaded, setUploaded] = useState<{ path: string; kind: string }[]>([]);
+  const [uploaded, setUploaded] = useState<{ path: string; kind: string; lat?: number; lng?: number; accuracy?: number; capturedAt?: string; method?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [liveMode, setLiveMode] = useState(true);
+  const [geoStatus, setGeoStatus] = useState<string>("");
+
+  /** Get the device's current location at capture time. Resolves with null if
+   *  the buddy denies permission or it's unavailable — capture still proceeds,
+   *  just without geo (and is marked as such). */
+  function getLocation(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
+    return new Promise((resolve) => {
+      if (!("geolocation" in navigator)) { resolve(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    });
+  }
 
   /** Compress images in the browser before upload (~max 1600px, JPEG q0.72).
    *  Turns 3-5MB phone photos into ~300-500KB — stretches free storage ~10x. */
@@ -34,17 +49,33 @@ export default function TaskDetail({ task }: { task: any }) {
 
   async function uploadSelected() {
     if (files.length === 0) return;
-    setUploading(true); setUploadError("");
-    const supabase = createClient();
-    const done: { path: string; kind: string }[] = [...uploaded];
+    setUploading(true); setUploadError(""); setGeoStatus("");
+    // Capture location once at submit time (all files captured in this session).
+    let geo: { lat: number; lng: number; accuracy: number } | null = null;
+    if (liveMode) {
+      setGeoStatus("Getting your location…");
+      geo = await getLocation();
+      setGeoStatus(geo ? `Location captured (±${Math.round(geo.accuracy)}m)` : "Location unavailable — proof will be marked without location.");
+    }
+    const capturedAt = new Date().toISOString();
+    const { uploadToR2 } = await import("@/lib/storage/upload-client");
+    const done = [...uploaded];
     for (const f of files) {
       const kind = f.type.startsWith("video") ? "video" : "photo";
       const payload = kind === "photo" ? await compressImage(f) : f;
-      const safeName = f.name.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/\.(png|webp|jpeg|jpg)$/i, ".jpg");
-      const path = `${task.id}/${Date.now()}-${kind === "photo" ? safeName : f.name.replace(/[^a-zA-Z0-9.\-_]/g, "_")}`;
-      const { error } = await supabase.storage.from("proofs").upload(path, payload, kind === "photo" ? { contentType: "image/jpeg" } : undefined);
-      if (error) { setUploadError(`${f.name}: ${error.message}`); setUploading(false); return; }
-      done.push({ path, kind });
+      const ext = kind === "photo" ? "jpg" : (f.name.split(".").pop() || "mp4");
+      const contentType = kind === "photo" ? "image/jpeg" : (f.type || "video/mp4");
+      try {
+        const { key } = await uploadToR2("proofs", payload, { ext, contentType, scope: task.id });
+        done.push({
+          path: key, kind,
+          lat: geo?.lat, lng: geo?.lng, accuracy: geo?.accuracy,
+          capturedAt,
+          method: liveMode ? "live" : "upload",
+        });
+      } catch (err: any) {
+        setUploadError(`${f.name}: ${err?.message || "upload failed"}`); setUploading(false); return;
+      }
     }
     setUploaded(done); setFiles([]); setUploading(false);
   }
@@ -83,7 +114,22 @@ export default function TaskDetail({ task }: { task: any }) {
           <textarea name="note" required placeholder="Your detailed report..." className="mt-3 min-h-[140px] w-full rounded-xl border border-bbb-border p-3 text-sm outline-none focus:border-bbb-strong" />
           <div className="mt-3 rounded-2xl border border-dashed border-bbb-border p-4">
             <p className="text-sm font-bold">Photos / videos</p>
-            <input type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onChange={(e) => setFiles(Array.from(e.target.files ?? []))} className="mt-2 block w-full text-xs text-bbb-slate" />
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-bbb-bg p-2 text-xs">
+              <button type="button" onClick={() => setLiveMode(true)} className={`rounded-md px-2 py-1 font-bold ${liveMode ? "bg-bbb-strong text-white" : "text-bbb-slate"}`}>📷 Take live photo</button>
+              <button type="button" onClick={() => setLiveMode(false)} className={`rounded-md px-2 py-1 font-bold ${!liveMode ? "bg-bbb-strong text-white" : "text-bbb-slate"}`}>Upload existing</button>
+            </div>
+            {liveMode
+              ? <p className="mt-2 text-xs text-bbb-slate">Take the photo/video now, on location. We record the time and place to verify it's genuine. Please allow location access when asked.</p>
+              : <p className="mt-2 text-xs text-amber-600">Uploaded files can't be location-verified. Live capture is preferred for trusted proof.</p>}
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+              {...(liveMode ? { capture: "environment" as any } : {})}
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              className="mt-2 block w-full text-xs text-bbb-slate"
+            />
+            {geoStatus && <p className="mt-1 text-xs font-semibold text-bbb-strong">{geoStatus}</p>}
             {files.length > 0 && (
               <button type="button" disabled={uploading} onClick={uploadSelected} className="mt-2 rounded-xl bg-bbb-charcoal px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{uploading ? "Uploading..." : `Upload ${files.length} file${files.length > 1 ? "s" : ""}`}</button>
             )}

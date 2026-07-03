@@ -104,7 +104,7 @@ export async function getRequestById(id: string) {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("requests")
-    .select("*, service_types(name), quote_items(id, label, amount_ngn), proofs(id, kind, file_url, note, created_at)")
+    .select("*, service_types(name), quote_items(id, label, amount_ngn), proofs(id, kind, file_url, note, created_at, captured_lat, captured_lng, captured_accuracy, captured_at, server_received_at, capture_method)")
     .eq("id", id)
     .single();
   if (error) return null;

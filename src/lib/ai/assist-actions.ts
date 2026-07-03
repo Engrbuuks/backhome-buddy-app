@@ -85,7 +85,19 @@ export async function aiCheckProofs(requestId: string) {
   const photoProofs = (req.proofs ?? []).filter((p: any) => p.file_url && p.kind !== "video");
   if (!photoProofs.length) return { error: "No proof images on this request yet." };
   const db = createAdminClient();
-  const { data: signed } = await db.storage.from("proofs").createSignedUrls(photoProofs.map((p: any) => p.file_url), 600);
+  const proofPaths = photoProofs.map((p: any) => p.file_url);
+  const urlMap = new Map<string, string>();
+  const { r2Configured, presignDownloadMany } = await import("@/lib/storage/r2");
+  if (r2Configured()) {
+    const r2 = await presignDownloadMany("proofs", proofPaths, 600);
+    r2.forEach((v, k) => urlMap.set(k, v));
+  }
+  const missing = (proofPaths.filter((p: string) => !urlMap.has(p)) as string[]);
+  if (missing.length) {
+    const { data: sup } = await db.storage.from("proofs").createSignedUrls(missing as string[], 600);
+    (sup ?? []).forEach((s: any) => { if (s.path && s.signedUrl) urlMap.set(s.path, s.signedUrl); });
+  }
+  const signed = proofPaths.map((p: string) => ({ path: p, signedUrl: urlMap.get(p) }));
   const images: AiImage[] = [];
   for (const s of (signed ?? []).slice(0, 6)) {
     if (!s.signedUrl) continue;

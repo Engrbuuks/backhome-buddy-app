@@ -19,8 +19,17 @@ export async function listBuddies() {
   // Short-lived signed URLs for vetting documents (admin-only view).
   const paths = buddies.flatMap((b: any) => [b.id_doc_path, b.utility_bill_path, b.pcc_path]).filter(Boolean) as string[];
   if (paths.length) {
-    const { data: signed } = await db.storage.from("vetting").createSignedUrls(paths, 3600);
-    const urlOf = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+    const urlOf = new Map<string, string | undefined>();
+    const { r2Configured, presignDownloadMany } = await import("@/lib/storage/r2");
+    if (r2Configured()) {
+      const r2 = await presignDownloadMany("vetting", paths, 3600);
+      r2.forEach((v, k) => urlOf.set(k, v));
+    }
+    const missing = (paths.filter((p) => !urlOf.get(p)) as string[]);
+    if (missing.length) {
+      const { data: signed } = await db.storage.from("vetting").createSignedUrls(missing as string[], 3600);
+      (signed ?? []).forEach((s: any) => { if (s.path && s.signedUrl) urlOf.set(s.path, s.signedUrl); });
+    }
     for (const b of buddies as any[]) {
       b.id_doc_url = b.id_doc_path ? urlOf.get(b.id_doc_path) : undefined;
       b.utility_bill_url = b.utility_bill_path ? urlOf.get(b.utility_bill_path) : undefined;

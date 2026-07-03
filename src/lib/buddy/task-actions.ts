@@ -41,12 +41,23 @@ export async function submitProof(_prev: unknown, formData: FormData) {
   if (!req) return { error: "Task not found." };
   if (!canTransition(req.status, "proof_ready")) return { error: `Cannot submit proof from "${req.status}".` };
   const db = createAdminClient();
-  const rows: any[] = [{ request_id: requestId, buddy_id: p.id, kind: "report", note }];
+  const now = new Date().toISOString();
+  const rows: any[] = [{ request_id: requestId, buddy_id: p.id, kind: "report", note, server_received_at: now }];
   try {
-    const files = JSON.parse(String(formData.get("files") || "[]")) as { path: string; kind: string }[];
+    const files = JSON.parse(String(formData.get("files") || "[]")) as {
+      path: string; kind: string; lat?: number; lng?: number; accuracy?: number; capturedAt?: string; method?: string;
+    }[];
     for (const f of files.slice(0, 12)) {
       if (f?.path && ["photo", "video"].includes(f.kind)) {
-        rows.push({ request_id: requestId, buddy_id: p.id, kind: f.kind, file_url: f.path });
+        rows.push({
+          request_id: requestId, buddy_id: p.id, kind: f.kind, file_url: f.path,
+          captured_lat: typeof f.lat === "number" ? f.lat : null,
+          captured_lng: typeof f.lng === "number" ? f.lng : null,
+          captured_accuracy: typeof f.accuracy === "number" ? f.accuracy : null,
+          captured_at: f.capturedAt || null,
+          capture_method: f.method === "live" ? "live" : "upload",
+          server_received_at: now,
+        });
       }
     }
   } catch {}

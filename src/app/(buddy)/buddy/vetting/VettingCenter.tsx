@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { Field, SelectField } from "@/components/FormControls";
 import { ErrorState } from "@/components/StateBlocks";
-import { createClient } from "@/lib/supabase/client";
 import { recordVettingDoc, saveGuarantors, saveNextOfKin, signNda } from "@/lib/buddy/vetting-actions";
 import { NDA_TITLE, NDA_CLAUSES, NDA_VERSION } from "@/lib/legal/nda";
 import { CheckCircle2, Circle, Upload, ShieldCheck } from "lucide-react";
@@ -129,17 +128,17 @@ function DocUpload({ buddyId, kind, title, hint, currentPath, needsType, current
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true); setUpError(""); setPath("");
-    const supabase = createClient();
     const isPdf = file.type === "application/pdf";
     const payload = isPdf ? file : await compressImage(file);
     const ext = isPdf ? "pdf" : "jpg";
-    const p = `${buddyId}/${kind}-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("vetting").upload(p, payload, {
-      contentType: isPdf ? "application/pdf" : "image/jpeg",
-      upsert: true,
-    });
-    if (error) { setUpError(error.message); setUploading(false); return; }
-    setPath(p); setUploading(false);
+    const contentType = isPdf ? "application/pdf" : "image/jpeg";
+    try {
+      const { uploadToR2 } = await import("@/lib/storage/upload-client");
+      const { key } = await uploadToR2("vetting", payload, { ext, contentType });
+      setPath(key); setUploading(false);
+    } catch (err: any) {
+      setUpError(err?.message || "Upload failed."); setUploading(false);
+    }
   }
 
   const uploaded = Boolean(currentPath) && !path;
