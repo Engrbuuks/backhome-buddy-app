@@ -42,16 +42,55 @@ export default function TaskDetail({ task }: { task: any }) {
     });
   }
 
-  /** Compress images in the browser before upload (~max 1600px, JPEG q0.72).
-   *  Turns 3-5MB phone photos into ~300-500KB — stretches free storage ~10x. */
-  async function compressImage(file: File): Promise<Blob> {
+  /** Compress images in the browser (~max 1600px, JPEG q0.72) AND burn a
+   *  verification stamp onto the photo: date/time, GPS coordinates, and brand.
+   *  This makes the proof self-evidently timestamped and location-tagged even if
+   *  the file is later downloaded or forwarded. */
+  async function compressImage(file: File, stamp?: { at: string; lat?: number; lng?: number; accuracy?: number }): Promise<Blob> {
     try {
       const bmp = await createImageBitmap(file);
       const scale = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(bmp.width * scale);
       canvas.height = Math.round(bmp.height * scale);
-      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+
+      if (stamp) {
+        const W = canvas.width, H = canvas.height;
+        const pad = Math.round(W * 0.025);
+        const fs = Math.max(14, Math.round(W * 0.028)); // font size scales with image
+        const lineH = Math.round(fs * 1.35);
+        const when = new Date(stamp.at);
+        const dateStr = when.toLocaleString();
+        const geoStr = (typeof stamp.lat === "number" && typeof stamp.lng === "number")
+          ? `${stamp.lat.toFixed(5)}, ${stamp.lng.toFixed(5)}${stamp.accuracy ? ` (±${Math.round(stamp.accuracy)}m)` : ""}`
+          : "Location not captured";
+        const lines = [
+          "🛡 Backhome Buddy — Verified capture",
+          `🕒 ${dateStr}`,
+          `📍 ${geoStr}`,
+        ];
+        // Semi-transparent banner across the bottom
+        const bannerH = lineH * lines.length + pad * 1.4;
+        ctx.fillStyle = "rgba(15,15,15,0.62)";
+        ctx.fillRect(0, H - bannerH, W, bannerH);
+        // Green accent bar
+        ctx.fillStyle = "#079516";
+        ctx.fillRect(0, H - bannerH, Math.round(W * 0.012), bannerH);
+        // Text
+        ctx.textBaseline = "top";
+        ctx.font = `600 ${fs}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+        let y = H - bannerH + pad * 0.7;
+        for (const ln of lines) {
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillText(ln, pad + 2, y + 1); // shadow for legibility
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(ln, pad, y);
+          y += lineH;
+        }
+      }
+
       const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.72));
       return blob && blob.size < file.size ? blob : file;
     } catch { return file; }
@@ -71,7 +110,8 @@ export default function TaskDetail({ task }: { task: any }) {
     const done = [...uploaded];
     for (const f of toUpload) {
       const kind = f.type.startsWith("video") ? "video" : "photo";
-      const payload = kind === "photo" ? await compressImage(f) : f;
+      const stamp = live ? { at: capturedAt, lat: geo?.lat, lng: geo?.lng, accuracy: geo?.accuracy } : undefined;
+      const payload = kind === "photo" ? await compressImage(f, stamp) : f;
       const ext = kind === "photo" ? "jpg" : (f.name.split(".").pop() || "mp4");
       const contentType = kind === "photo" ? "image/jpeg" : (f.type || "video/mp4");
       try {
