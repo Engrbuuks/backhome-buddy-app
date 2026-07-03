@@ -13,7 +13,7 @@ export async function listBuddies() {
   if (!(await admin())) return [];
   const db = createAdminClient();
   const { data } = await db.from("buddy_profiles")
-    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, vetting_checks, vetting_notes, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
+    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
     .order("created_at", { ascending: false });
   const buddies = data ?? [];
   // Short-lived signed URLs for vetting documents (admin-only view).
@@ -33,6 +33,7 @@ export async function listBuddies() {
 export async function updateVettingCheck(buddyId: string, key: string, value: boolean) {
   const p = await admin(); if (!p) return { error: "Not authorized." };
   if (!VETTING_CHECKS.some(([k]) => k === key)) return { error: "Unknown check." };
+  if (key === "nda_signed") return { error: "The NDA check is set automatically when the buddy signs it in their portal — it can't be ticked manually." };
   const db = createAdminClient();
   const { data: row } = await db.from("buddy_profiles").select("vetting_checks").eq("id", buddyId).maybeSingle();
   const checks = { ...(row?.vetting_checks ?? {}), [key]: value };

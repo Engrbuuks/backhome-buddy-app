@@ -20,7 +20,7 @@ export async function getMyVetting() {
   const db = createAdminClient();
   const { data } = await db
     .from("buddy_profiles")
-    .select("id, vetting, id_doc_type, id_doc_path, utility_bill_path, pcc_path, guarantors, next_of_kin, bank_name, bank_account_number")
+    .select("id, vetting, id_doc_type, id_doc_path, utility_bill_path, pcc_path, guarantors, next_of_kin, bank_name, bank_account_number, nda_signed_at, nda_signed_name, nda_version, profiles!buddy_profiles_id_fkey(full_name)")
     .eq("id", p.id)
     .maybeSingle();
   return data;
@@ -93,4 +93,28 @@ export async function saveNextOfKin(_prev: unknown, formData: FormData) {
   await db.from("audit_log").insert({ actor_id: p.id, action: "vetting_nok_saved", detail: {} });
   revalidatePath("/buddy/vetting");
   return { error: "", saved: true };
+}
+
+/** Buddy signs the NDA in-app. Records typed name + timestamp + version, and
+ *  auto-ticks the 'nda_signed' vetting check (which gates approval). */
+export async function signNda(fullName: string) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "buddy") return { error: "Not authorised." };
+  const name = String(fullName || "").trim();
+  if (name.length < 3) return { error: "Please type your full legal name to sign." };
+
+  const { NDA_VERSION } = await import("@/lib/legal/nda");
+  const db = createAdminClient();
+  const { data: row } = await db.from("buddy_profiles").select("vetting_checks").eq("id", p.id).maybeSingle();
+  const checks = { ...(row?.vetting_checks ?? {}), nda_signed: true };
+  const { error } = await db.from("buddy_profiles").update({
+    nda_signed_at: new Date().toISOString(),
+    nda_signed_name: name,
+    nda_version: NDA_VERSION,
+    vetting_checks: checks,
+  }).eq("id", p.id);
+  if (error) return { error: error.message };
+  await db.from("audit_log").insert({ actor_id: p.id, action: "nda_signed", target_id: p.id, detail: { name, version: NDA_VERSION } });
+  revalidatePath("/buddy/verification");
+  return { error: "" };
 }

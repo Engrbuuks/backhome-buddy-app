@@ -4,8 +4,88 @@ import { useFormState, useFormStatus } from "react-dom";
 import { Field, SelectField } from "@/components/FormControls";
 import { ErrorState } from "@/components/StateBlocks";
 import { createClient } from "@/lib/supabase/client";
-import { recordVettingDoc, saveGuarantors, saveNextOfKin } from "@/lib/buddy/vetting-actions";
-import { CheckCircle2, Circle, Upload } from "lucide-react";
+import { recordVettingDoc, saveGuarantors, saveNextOfKin, signNda } from "@/lib/buddy/vetting-actions";
+import { NDA_TITLE, NDA_CLAUSES, NDA_VERSION } from "@/lib/legal/nda";
+import { CheckCircle2, Circle, Upload, ShieldCheck } from "lucide-react";
+
+function NdaSection({ v }: { v: any }) {
+  const signed = Boolean(v.nda_signed_at);
+  const suggestedName = v.nda_signed_name || v.profiles?.full_name || "";
+  const [name, setName] = useState(suggestedName);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [openText, setOpenText] = useState(false);
+  const [doneNow, setDoneNow] = useState(false);
+
+  const sign = async () => {
+    setBusy(true); setErr("");
+    const res = await signNda(name);
+    setBusy(false);
+    if (res.error) setErr(res.error); else setDoneNow(true);
+  };
+
+  if (signed || doneNow) {
+    return (
+      <div className="mt-5 rounded-3xl border border-green-200 bg-green-50 p-5">
+        <div className="flex items-center gap-2 text-green-800">
+          <ShieldCheck className="h-5 w-5" />
+          <p className="font-display text-base font-extrabold">Confidentiality Agreement signed</p>
+        </div>
+        <p className="mt-2 text-sm text-green-800">
+          Signed by <strong>{v.nda_signed_name || name}</strong>
+          {v.nda_signed_at ? ` on ${new Date(v.nda_signed_at).toLocaleDateString()}` : ""} (v{v.nda_version || NDA_VERSION}). Thank you.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 rounded-3xl border-2 border-bbb-strong bg-white p-5 shadow-soft">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-5 w-5 text-bbb-strong" />
+        <p className="font-display text-base font-extrabold">Step 1 — Sign your Confidentiality Agreement</p>
+      </div>
+      <p className="mt-2 text-sm text-bbb-slate">
+        Trust is our product. Before you can be approved, every buddy signs this Non-Disclosure &amp; Confidentiality Agreement.
+        Please read it and sign below.
+      </p>
+
+      <button type="button" onClick={() => setOpenText(!openText)} className="mt-3 text-sm font-bold text-bbb-strong">
+        {openText ? "Hide agreement" : "Read the full agreement"}
+      </button>
+
+      {openText && (
+        <div className="mt-3 max-h-72 overflow-y-auto rounded-2xl border border-bbb-border bg-bbb-bg p-4 text-sm leading-6 text-bbb-charcoal">
+          <p className="mb-3 font-extrabold">{NDA_TITLE} (v{NDA_VERSION})</p>
+          {NDA_CLAUSES.map((c) => (
+            <div key={c.heading} className="mb-3">
+              <p className="font-bold">{c.heading}</p>
+              <p className="text-bbb-slate">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-3">
+        <label className="flex items-start gap-2.5 text-sm">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#079516]" />
+          <span>I have read and agree to be bound by the Backhome Buddy Confidentiality Agreement, and I agree my electronic signature is valid and binding.</span>
+        </label>
+        <div>
+          <label className="mb-1 block text-xs font-bold text-bbb-slate">Type your full legal name to sign</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Chinedu Okafor" className="h-11 w-full rounded-xl border border-bbb-border bg-white px-4 text-sm outline-none focus:border-bbb-strong" />
+        </div>
+        {err && <p className="text-sm font-semibold text-red-600">{err}</p>}
+        <button
+          disabled={busy || !agree || name.trim().length < 3}
+          onClick={sign}
+          className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50"
+        >{busy ? "Signing…" : "Sign the agreement"}</button>
+      </div>
+    </div>
+  );
+}
 
 function SaveBtn({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -111,9 +191,12 @@ export default function VettingCenter({ v }: { v: any }) {
         Documents go to private, encrypted storage and are seen only by our vetting team.
       </p>
 
+      <NdaSection v={v} />
+
       <div className="mt-5 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
         <p className="mb-3 font-display text-base font-extrabold">Your progress</p>
         <ul className="space-y-2">
+          <Item done={Boolean(v.nda_signed_at)} label="Confidentiality Agreement signed" />
           <Item done={Boolean(v.id_doc_path)} label="Government ID uploaded" />
           <Item done={Boolean(v.utility_bill_path)} label="Proof of address uploaded (utility bill)" />
           <Item done={hasGuarantors} label="Two guarantors provided" />

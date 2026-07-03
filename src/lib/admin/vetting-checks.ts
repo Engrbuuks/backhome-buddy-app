@@ -1,6 +1,7 @@
 /** The checks that must ALL be ticked before a buddy can be approved.
  *  Shared by server actions (approval gate) and the admin UI (checklist). */
 export const VETTING_CHECKS: ReadonlyArray<readonly [string, string]> = [
+  ["nda_signed", "NDA signed by buddy (in-app)"],
   ["id_verified", "ID document verified (matches name + photo)"],
   ["nin_checked", "NIN checked"],
   ["address_verified", "Address verified (utility bill / visit)"],

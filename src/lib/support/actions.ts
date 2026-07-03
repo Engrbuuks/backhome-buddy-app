@@ -73,7 +73,7 @@ export async function getThreadForAdmin(id: string) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "admin") return null;
   const db = createAdminClient();
-  const { data: t } = await db.from("chat_threads").select("id, user_id, visitor_name, visitor_email").eq("id", id).single();
+  const { data: t } = await db.from("chat_threads").select("id, user_id, visitor_name, visitor_email, ai_enabled").eq("id", id).single();
   if (!t) return null;
   const { data: prof } = t.user_id ? await db.from("profiles").select("full_name, email").eq("id", t.user_id).single() : { data: null };
   const { data: messages } = await db.from("chat_messages").select("*").eq("thread_id", id).order("created_at");
@@ -90,9 +90,30 @@ export async function staffReply(_prev: unknown, formData: FormData) {
   const db = createAdminClient();
   const { error } = await db.from("chat_messages").insert({ thread_id: threadId, sender: "staff", content });
   if (error) return { error: error.message };
-  await db.from("chat_threads").update({ last_message_at: new Date().toISOString() }).eq("id", threadId);
+  // A human has taken over — silence the website AI for this thread.
+  await db.from("chat_threads").update({ last_message_at: new Date().toISOString(), ai_enabled: false }).eq("id", threadId);
   const { data: t } = await db.from("chat_threads").select("user_id").eq("id", threadId).single();
   if (t?.user_id) await notify(t.user_id, "New reply from our team", content.slice(0, 120), "/client/support");
   revalidatePath(`/admin/chats/${threadId}`); revalidatePath("/admin/chats");
   return { error: "" };
+}
+
+/** Hand a thread back to the AI (re-enable auto-replies) after a human is done. */
+export async function resumeAi(threadId: string) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { error: "Not authorized." };
+  if (!threadId) return { error: "Missing thread." };
+  const db = createAdminClient();
+  const { error } = await db.from("chat_threads").update({ ai_enabled: true }).eq("id", threadId);
+  return { error: error?.message ?? "" };
+}
+
+/** Explicitly take over a thread (silence AI) without sending a message yet. */
+export async function takeOverChat(threadId: string) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { error: "Not authorized." };
+  if (!threadId) return { error: "Missing thread." };
+  const db = createAdminClient();
+  const { error } = await db.from("chat_threads").update({ ai_enabled: false }).eq("id", threadId);
+  return { error: error?.message ?? "" };
 }

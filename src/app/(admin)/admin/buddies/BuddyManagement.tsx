@@ -107,6 +107,17 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           </div>
           <div className="space-y-2">
             {VETTING_CHECKS.map(([key, label]) => (
+              key === "nda_signed" ? (
+                <div key={key} className="flex items-start gap-2.5 text-sm leading-5">
+                  <input type="checkbox" checked={Boolean(b.nda_signed_at)} disabled readOnly className="mt-0.5 h-4 w-4 rounded border-bbb-border accent-[#079516]" />
+                  <span className={b.nda_signed_at ? "text-bbb-charcoal" : "text-bbb-slate"}>
+                    {label}
+                    {b.nda_signed_at
+                      ? <em className="ml-1 not-italic text-xs text-green-700">— signed by {b.nda_signed_name} on {new Date(b.nda_signed_at).toLocaleDateString()}</em>
+                      : <em className="ml-1 not-italic text-xs text-amber-600">— awaiting buddy's signature in their portal</em>}
+                  </span>
+                </div>
+              ) : (
               <label key={key} className="flex items-start gap-2.5 text-sm leading-5">
                 <input
                   type="checkbox"
@@ -117,6 +128,7 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
                 />
                 <span className={checks[key] ? "text-bbb-charcoal" : "text-bbb-slate"}>{label}</span>
               </label>
+              )
             ))}
           </div>
           {!allDone && b.vetting !== "approved" && (
