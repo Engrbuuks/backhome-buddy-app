@@ -42,7 +42,7 @@ export async function submitProof(_prev: unknown, formData: FormData) {
   if (!canTransition(req.status, "proof_ready")) return { error: `Cannot submit proof from "${req.status}".` };
   const db = createAdminClient();
   const now = new Date().toISOString();
-  const rows: any[] = [{ request_id: requestId, buddy_id: p.id, kind: "report", note, server_received_at: now }];
+  const rows: any[] = [{ request_id: requestId, buddy_id: p.id, kind: "report", note, capture_method: "upload", server_received_at: now }];
   try {
     const files = JSON.parse(String(formData.get("files") || "[]")) as {
       path: string; kind: string; lat?: number; lng?: number; accuracy?: number; capturedAt?: string; method?: string;
