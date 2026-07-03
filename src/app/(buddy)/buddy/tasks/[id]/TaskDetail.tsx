@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useRef } from "react";
 import { useFormState } from "react-dom";
 import { StatusPill } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
@@ -17,6 +17,12 @@ export default function TaskDetail({ task }: { task: any }) {
   const [uploadError, setUploadError] = useState("");
   const [liveMode, setLiveMode] = useState(true);
   const [geoStatus, setGeoStatus] = useState<string>("");
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const onFilesPicked = (list: FileList | null, live: boolean) => {
+    setLiveMode(live);
+    setFiles(Array.from(list ?? []));
+  };
 
   /** Get the device's current location at capture time. Resolves with null if
    *  the buddy denies permission or it's unavailable — capture still proceeds,
@@ -114,21 +120,32 @@ export default function TaskDetail({ task }: { task: any }) {
           <textarea name="note" required placeholder="Your detailed report..." className="mt-3 min-h-[140px] w-full rounded-xl border border-bbb-border p-3 text-sm outline-none focus:border-bbb-strong" />
           <div className="mt-3 rounded-2xl border border-dashed border-bbb-border p-4">
             <p className="text-sm font-bold">Photos / videos</p>
-            <div className="mt-2 flex items-center gap-2 rounded-lg bg-bbb-bg p-2 text-xs">
-              <button type="button" onClick={() => setLiveMode(true)} className={`rounded-md px-2 py-1 font-bold ${liveMode ? "bg-bbb-strong text-white" : "text-bbb-slate"}`}>📷 Take live photo</button>
-              <button type="button" onClick={() => setLiveMode(false)} className={`rounded-md px-2 py-1 font-bold ${!liveMode ? "bg-bbb-strong text-white" : "text-bbb-slate"}`}>Upload existing</button>
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <button type="button" onClick={() => cameraRef.current?.click()} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 Take live photo</button>
+              <button type="button" onClick={() => galleryRef.current?.click()} className="rounded-lg border border-bbb-border px-3 py-2 font-bold text-bbb-slate hover:border-bbb-strong">Upload existing</button>
             </div>
             {liveMode
               ? <p className="mt-2 text-xs text-bbb-slate">Take the photo/video now, on location. We record the time and place to verify it's genuine. Please allow location access when asked.</p>
               : <p className="mt-2 text-xs text-amber-600">Uploaded files can't be location-verified. Live capture is preferred for trusted proof.</p>}
+            {/* Camera input: single file + capture opens the rear camera on mobile. */}
             <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              onChange={(e) => onFilesPicked(e.target.files, true)}
+              className="hidden"
+            />
+            {/* Gallery input: multiple, no capture — opens the file/photo picker. */}
+            <input
+              ref={galleryRef}
               type="file"
               multiple
               accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
-              {...(liveMode ? { capture: "environment" as any } : {})}
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-              className="mt-2 block w-full text-xs text-bbb-slate"
+              onChange={(e) => onFilesPicked(e.target.files, false)}
+              className="hidden"
             />
+            {files.length > 0 && <p className="mt-2 text-xs font-semibold text-bbb-charcoal">{files.length} file{files.length > 1 ? "s" : ""} ready {liveMode ? "(live capture)" : "(upload)"}</p>}
             {geoStatus && <p className="mt-1 text-xs font-semibold text-bbb-strong">{geoStatus}</p>}
             {files.length > 0 && (
               <button type="button" disabled={uploading} onClick={uploadSelected} className="mt-2 rounded-xl bg-bbb-charcoal px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{uploading ? "Uploading..." : `Upload ${files.length} file${files.length > 1 ? "s" : ""}`}</button>

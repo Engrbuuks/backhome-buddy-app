@@ -69,6 +69,13 @@ export async function notify(userId: string, title: string, body: string, link?:
   if (p?.email) await sendEmail(p.email, title, body, link);
 }
 
+/** In-app notification only — no email. Use when an email is already being sent
+ *  separately for the same event, to avoid the buddy/client getting two emails. */
+export async function notifyInApp(userId: string, title: string, body: string, link?: string) {
+  const db = createAdminClient();
+  await db.from("notifications").insert({ user_id: userId, title, body, link: link ?? null });
+}
+
 /** In-app notification + email for every admin. */
 export async function notifyAdmins(title: string, body: string, link?: string) {
   const db = createAdminClient();

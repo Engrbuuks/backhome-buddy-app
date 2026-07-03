@@ -126,7 +126,7 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
   if (!itemKeys?.length) return { error: "Select at least one item to request." };
 
   const { REQUESTABLE_ITEMS } = await import("./request-documents");
-  const { sendBrandedEmail, notify } = await import("@/lib/notifications/notify");
+  const { sendBrandedEmail, notifyInApp } = await import("@/lib/notifications/notify");
   const db = createAdminClient();
 
   const { data: buddy } = await db
@@ -151,7 +151,7 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
 
   // Link the buddy straight to their in-app verification/upload page.
   await sendBrandedEmail(email, "Action needed: upload your verification documents", body, "/buddy/vetting", support);
-  await notify(buddyId, "Documents needed for verification",
+  await notifyInApp(buddyId, "Documents needed for verification",
     `Please upload: ${chosen.map(([, l]) => l.split(":")[0]).join(", ")}.`, "/buddy/vetting");
 
   await db.from("audit_log").insert({ actor_id: p.id, action: "request_documents", target_id: buddyId, detail: { items: itemKeys } });
@@ -165,7 +165,7 @@ export async function requestBuddyDocuments(buddyId: string, itemKeys: string[])
 export async function requestBuddyAction(buddyId: string, action: "nda" | "guarantors") {
   const p = await admin(); if (!p) return { error: "Not authorised" };
   const { sendBrandedEmail } = await import("@/lib/notifications/notify");
-  const { notify } = await import("@/lib/notifications/notify");
+  const { notifyInApp } = await import("@/lib/notifications/notify");
   const db = createAdminClient();
 
   const { data: buddy } = await db
@@ -200,7 +200,7 @@ export async function requestBuddyAction(buddyId: string, action: "nda" | "guara
 
   await sendBrandedEmail(email, subject, body, link, support);
   // Also drop an in-app notification for the buddy.
-  await notify(buddyId, action === "nda" ? "Please sign your NDA" : "Please add guarantor details",
+  await notifyInApp(buddyId, action === "nda" ? "Please sign your NDA" : "Please add guarantor details",
     action === "nda" ? "Sign the Confidentiality Agreement to continue your approval." : "Add your guarantors and next of kin to continue.",
     "/buddy/vetting");
 
