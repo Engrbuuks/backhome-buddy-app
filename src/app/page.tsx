@@ -5,6 +5,10 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 import { HOME_FOR } from "@/lib/auth/actions";
 import { PublicChatWidget } from "@/components/PublicChatWidget";
 
+// This page reads cookies (auth) and search params (?code= from email
+// confirmation), so it must be rendered per-request, never statically.
+export const dynamic = "force-dynamic";
+
 /** Root landing. Also the destination for email-confirmation links, which arrive
  *  with a ?code=. We exchange that code for a session and send the user straight
  *  to their dashboard — they never see this page after confirming. */
