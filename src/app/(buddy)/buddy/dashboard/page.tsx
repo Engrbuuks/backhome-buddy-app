@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listMyTasks } from "@/lib/buddy/actions";
 import { getMyProfileSummary } from "@/lib/buddy/vetting-actions";
+import { PassportPhotoUploader } from "@/components/PassportPhotoUploader";
 import { StatusPill } from "@/components/StatusPill";
 import { formatNGN, formatDate } from "@/components/money";
 
@@ -28,7 +29,7 @@ export default async function BuddyDashboard() {
               <p className="font-display text-lg font-extrabold">{profile.profiles?.full_name ?? "Your profile"}</p>
               <p className="truncate text-xs text-bbb-slate">{profile.profiles?.email}{profile.profiles?.phone ? ` · ${profile.profiles.phone}` : ""}</p>
               {!profile.photoUrl && (
-                <Link href="/buddy/vetting" className="mt-1 inline-block text-xs font-bold text-bbb-strong">+ Add your passport photo</Link>
+                <div className="mt-1"><PassportPhotoUploader buddyId={profile.id} compact /></div>
               )}
             </div>
           </div>

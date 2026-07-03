@@ -48,3 +48,31 @@ export async function updateBuddySkills(_prev: unknown, formData: FormData) {
   revalidatePath("/buddy/profile");
   return { error: "", saved: true };
 }
+
+/** Buddy edits their own profile details. Only fields a buddy may safely change
+ *  are accepted here — identity/verification fields (NIN, DOB, documents,
+ *  vetting status) are intentionally NOT editable. */
+export async function updateBuddyDetails(_prev: unknown, formData: FormData) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "buddy") return { error: "Not authorized." };
+  const g = (k: string) => String(formData.get(k) || "").trim();
+  const coverage = g("coverage_areas").split(",").map((s) => s.trim()).filter(Boolean);
+
+  const update: Record<string, unknown> = {
+    id: p.id,
+    city: g("city") || null,
+    state: g("state") || null,
+    lga: g("lga") || null,
+    occupation: g("occupation") || null,
+    experience: g("experience") || null,
+    availability: g("availability") || null,
+    coverage_areas: coverage.length ? coverage : null,
+    has_smartphone: formData.get("has_smartphone") === "on",
+    can_drive: formData.get("can_drive") === "on",
+  };
+  const supabase = createClient();
+  const { error } = await supabase.from("buddy_profiles").upsert(update);
+  if (error) return { error: error.message };
+  revalidatePath("/buddy/profile");
+  return { error: "", saved: true };
+}

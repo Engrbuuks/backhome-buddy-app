@@ -15,7 +15,7 @@ function rateLimited(key: string, max = 8, windowMs = 60_000): boolean {
   return a.n > max;
 }
 
-const HOME_FOR: Record<UserRole, string> = {
+export const HOME_FOR: Record<UserRole, string> = {
   client: "/client/dashboard",
   buddy: "/buddy/dashboard",
   admin: "/admin/dashboard",
@@ -50,9 +50,10 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   const supabase = createClient();
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
   const { error } = await supabase.auth.signUp({
     email, password,
-    options: { data: { full_name: fullName } },
+    options: { data: { full_name: fullName }, emailRedirectTo: appUrl },
   });
   if (error) return { error: error.message };
   redirect("/client/dashboard");
@@ -115,9 +116,10 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   if (!declareTrue) return { error: "Confirm that the information you provided is true." };
 
   const supabase = createClient();
+  const buddyAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
   const { data, error } = await supabase.auth.signUp({
     email, password,
-    options: { data: { full_name: fullName } },
+    options: { data: { full_name: fullName }, emailRedirectTo: buddyAppUrl },
   });
   if (error) {
     const msg = error.message.toLowerCase();
