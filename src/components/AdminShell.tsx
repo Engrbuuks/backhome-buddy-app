@@ -10,6 +10,7 @@ LogOut, Menu, X, BookOpen,
 } from "lucide-react";
 
 import { NotificationBadge } from "@/components/NotificationBadge";
+import { NotificationStrip } from "@/components/NotificationStrip";
 
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -97,6 +98,7 @@ export function AdminShell({ title, children }: { title: string; children: React
             </nav>
           )}
           <h1 className="sr-only">{title}</h1>
+          <NotificationStrip href="/admin/notifications" />
           {children}
         </main>
       </div>

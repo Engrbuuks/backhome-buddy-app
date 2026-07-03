@@ -1,5 +1,6 @@
 "use client";
 import { NotificationBadge } from "@/components/NotificationBadge";
+import { NotificationStrip } from "@/components/NotificationStrip";
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,7 +42,7 @@ export function BuddyShell({ children, unreadCount = 0 }: { children: React.Reac
           })}
         </nav>
       </header>
-      <main className="mx-auto max-w-container px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-container px-4 py-8"><NotificationStrip href="/buddy/notifications" />{children}</main>
     </div>
   );
 }

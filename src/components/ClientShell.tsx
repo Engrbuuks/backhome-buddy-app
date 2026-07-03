@@ -6,6 +6,7 @@ import { Bell, Home, LifeBuoy, LogOut, Menu, PlusCircle, Settings, UsersRound } 
 import { signOut } from "@/lib/auth/actions";
 
 import { NotificationBadge } from "@/components/NotificationBadge";
+import { NotificationStrip } from "@/components/NotificationStrip";
 
 const NAV = [
   { label: "Dashboard", href: "/client/dashboard", icon: Home },
@@ -65,6 +66,7 @@ export function ClientShell({ children, unreadCount = 0 }: { children: React.Rea
             <img src="/images/logo.png" alt="Backhome Buddy" className="h-7 w-auto" />
             <span className="w-10" />
           </div>
+          <NotificationStrip href="/client/notifications" />
           {children}
         </main>
       </div>
