@@ -12,6 +12,13 @@ export async function getUnreadCount() {
   const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("read", false);
   return count ?? 0;
 }
+export async function markRead(id: string) {
+  if (!id) return { error: "Missing id." };
+  const supabase = createClient(); // RLS: update own
+  const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id).eq("read", false);
+  revalidatePath("/client/notifications"); revalidatePath("/buddy/notifications"); revalidatePath("/admin/notifications");
+  return { error: error?.message ?? "" };
+}
 export async function markAllRead() {
   const supabase = createClient(); // RLS: update own
   await supabase.from("notifications").update({ read: true }).eq("read", false);
