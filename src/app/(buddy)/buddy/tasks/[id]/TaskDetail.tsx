@@ -154,6 +154,25 @@ export default function TaskDetail({ task }: { task: any }) {
       )}
 
       {task.status === "in_progress" && (
+        <>
+          {/* File inputs live OUTSIDE the form so the camera capture attribute
+              and the server-action form don't interfere with each other. */}
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => onFilesPicked(e.target.files, true)}
+            className="hidden"
+          />
+          <input
+            ref={galleryRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+            onChange={(e) => onFilesPicked(e.target.files, false)}
+            className="hidden"
+          />
         <form action={formAction} className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <h2 className="font-display text-lg font-extrabold">Submit proof</h2>
           <p className="mt-1 text-xs text-bbb-slate">Write your report: what you did, what you found. Attach photos or a short video below.</p>
@@ -170,24 +189,6 @@ export default function TaskDetail({ task }: { task: any }) {
             {liveMode
               ? <p className="mt-2 text-xs text-bbb-slate">Take the photo/video now, on location. We record the time and place to verify it's genuine. Please allow location access when asked.</p>
               : <p className="mt-2 text-xs text-amber-600">Uploaded files can't be location-verified. Live capture is preferred for trusted proof.</p>}
-            {/* Camera input: single file + capture opens the rear camera on mobile. */}
-            <input
-              ref={cameraRef}
-              type="file"
-              accept="image/*,video/*"
-              capture="environment"
-              onChange={(e) => onFilesPicked(e.target.files, true)}
-              className="hidden"
-            />
-            {/* Gallery input: multiple, no capture — opens the file/photo picker. */}
-            <input
-              ref={galleryRef}
-              type="file"
-              multiple
-              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
-              onChange={(e) => onFilesPicked(e.target.files, false)}
-              className="hidden"
-            />
             {uploading && <p className="mt-2 text-xs font-semibold text-bbb-strong">Uploading…</p>}
             {geoStatus && <p className="mt-1 text-xs font-semibold text-bbb-strong">{geoStatus}</p>}
             {uploadError && <p className="mt-2 text-xs font-semibold text-red-600">{uploadError} — please try again.</p>}
@@ -197,6 +198,7 @@ export default function TaskDetail({ task }: { task: any }) {
             {uploading ? "Wait — finishing upload…" : uploaded.length === 0 ? "Submit report (no photo attached)" : "Submit proof for review"}
           </button>
         </form>
+        </>
       )}
 
       {["proof_ready", "proof_approved", "completed", "paid_out"].includes(task.status) && (
