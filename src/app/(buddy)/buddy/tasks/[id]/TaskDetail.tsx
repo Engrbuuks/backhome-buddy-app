@@ -19,6 +19,7 @@ export default function TaskDetail({ task }: { task: any }) {
   const [geoStatus, setGeoStatus] = useState<string>("");
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const prefetchedGeoRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null);
   const onFilesPicked = (list: FileList | null, live: boolean) => {
     const picked = Array.from(list ?? []);
     if (picked.length === 0) return;
@@ -28,16 +29,40 @@ export default function TaskDetail({ task }: { task: any }) {
     void uploadFiles(picked, live);
   };
 
+  // Tapping "Take live photo" grabs location FIRST (on the clean tap gesture, so
+  // the permission prompt reliably appears), then opens the camera.
+  const startLiveCapture = async () => {
+    setGeoStatus("Getting your location…");
+    const geo = await getLocation();
+    prefetchedGeoRef.current = geo;
+    if (geo) setGeoStatus(`Location ready (±${Math.round(geo.accuracy)}m) — opening camera…`);
+    cameraRef.current?.click();
+  };
+
   /** Get the device's current location at capture time. Resolves with null if
    *  the buddy denies permission or it's unavailable — capture still proceeds,
    *  just without geo (and is marked as such). */
   function getLocation(): Promise<{ lat: number; lng: number; accuracy: number } | null> {
     return new Promise((resolve) => {
-      if (!("geolocation" in navigator)) { resolve(null); return; }
+      if (!("geolocation" in navigator)) {
+        setGeoStatus("This device/browser doesn't support location.");
+        resolve(null); return;
+      }
+      const onOk = (pos: GeolocationPosition) =>
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      const onErr = (err: GeolocationPositionError) => {
+        // 1 = permission denied, 2 = position unavailable, 3 = timeout
+        if (err.code === 1) setGeoStatus("⚠ Location permission was blocked. Enable location for this site in your browser settings, then retake the photo.");
+        else if (err.code === 3) setGeoStatus("⚠ Getting GPS took too long. Make sure location is ON, step outside if indoors, and retake the photo.");
+        else setGeoStatus("⚠ Couldn't get your location. Make sure location is ON and retake the photo.");
+        resolve(null);
+      };
+      // First try a quick high-accuracy fix; if it times out, fall back to a
+      // longer, lower-accuracy attempt (indoors GPS can be slow).
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        onOk,
+        () => navigator.geolocation.getCurrentPosition(onOk, onErr, { enableHighAccuracy: false, timeout: 25000, maximumAge: 60000 }),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     });
   }
@@ -101,9 +126,14 @@ export default function TaskDetail({ task }: { task: any }) {
     setUploading(true); setUploadError(""); setGeoStatus("");
     let geo: { lat: number; lng: number; accuracy: number } | null = null;
     if (live) {
-      setGeoStatus("Getting your location…");
-      geo = await getLocation();
-      setGeoStatus(geo ? `Location captured (±${Math.round(geo.accuracy)}m)` : "Location unavailable — proof will be marked without location.");
+      // Prefer the location grabbed when they tapped the camera button.
+      geo = prefetchedGeoRef.current;
+      if (!geo) {
+        setGeoStatus("Getting your location…");
+        geo = await getLocation();
+      }
+      setGeoStatus(geo ? `Location captured (±${Math.round(geo.accuracy)}m)` : (geoStatus || "Location unavailable — proof will be marked without location."));
+      prefetchedGeoRef.current = null;
     }
     const capturedAt = new Date().toISOString();
     const { uploadToR2 } = await import("@/lib/storage/upload-client");
@@ -183,7 +213,7 @@ export default function TaskDetail({ task }: { task: any }) {
           <div className="mt-3 rounded-2xl border border-dashed border-bbb-border p-4">
             <p className="text-sm font-bold">Photos / videos</p>
             <div className="mt-2 flex items-center gap-2 text-xs">
-              <button type="button" onClick={() => cameraRef.current?.click()} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 Take live photo</button>
+              <button type="button" onClick={startLiveCapture} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 Take live photo</button>
               <button type="button" onClick={() => galleryRef.current?.click()} className="rounded-lg border border-bbb-border px-3 py-2 font-bold text-bbb-slate hover:border-bbb-strong">Upload existing</button>
             </div>
             {liveMode
