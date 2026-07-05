@@ -17,6 +17,30 @@ export default function TaskDetail({ task }: { task: any }) {
   const [uploadError, setUploadError] = useState("");
   const [liveMode, setLiveMode] = useState(true);
   const [geoStatus, setGeoStatus] = useState<string>("");
+  const [geoDiag, setGeoDiag] = useState<string>("");
+
+  // Standalone location test — reports exactly what the browser does, so a
+  // blocked/timeout/unsupported state is visible rather than guessed.
+  const testLocation = async () => {
+    setGeoDiag("Testing…");
+    const parts: string[] = [];
+    parts.push(`secure(HTTPS): ${typeof window !== "undefined" && window.isSecureContext ? "yes" : "NO"}`);
+    parts.push(`geolocation API: ${"geolocation" in navigator ? "present" : "MISSING"}`);
+    try {
+      const st = await (navigator as any).permissions?.query?.({ name: "geolocation" });
+      parts.push(`permission: ${st?.state ?? "unknown"}`);
+    } catch { parts.push("permission: query-unsupported"); }
+    await new Promise<void>((resolve) => {
+      if (!("geolocation" in navigator)) { parts.push("result: no API"); resolve(); return; }
+      const t0 = Date.now();
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { parts.push(`result: OK ±${Math.round(pos.coords.accuracy)}m in ${Date.now() - t0}ms`); resolve(); },
+        (err) => { parts.push(`result: ERROR code ${err.code} (${err.code === 1 ? "denied" : err.code === 2 ? "unavailable" : "timeout"}) — ${err.message}`); resolve(); },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+      );
+    });
+    setGeoDiag(parts.join(" | "));
+  };
   const cameraRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -253,7 +277,9 @@ export default function TaskDetail({ task }: { task: any }) {
               <button type="button" onClick={startLiveCapture} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 {uploaded.length ? "Add another photo" : "Take live photo"}</button>
               <button type="button" onClick={startLiveVideo} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">🎥 Record video</button>
               <button type="button" onClick={() => galleryRef.current?.click()} className="rounded-lg border border-bbb-border px-3 py-2 font-bold text-bbb-slate hover:border-bbb-strong">Upload existing</button>
+              <button type="button" onClick={testLocation} className="rounded-lg border border-bbb-border px-3 py-2 font-bold text-bbb-slate hover:border-bbb-strong">🧭 Test my location</button>
             </div>
+            {geoDiag && <p className="mt-2 break-words rounded-lg bg-bbb-bg p-2 text-[11px] font-mono text-bbb-charcoal">{geoDiag}</p>}
 
             {locBlocked && (
               <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
