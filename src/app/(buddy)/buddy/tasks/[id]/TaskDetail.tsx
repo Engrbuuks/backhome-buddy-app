@@ -18,8 +18,10 @@ export default function TaskDetail({ task }: { task: any }) {
   const [liveMode, setLiveMode] = useState(true);
   const [geoStatus, setGeoStatus] = useState<string>("");
   const cameraRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const prefetchedGeoRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [locBlocked, setLocBlocked] = useState(false);
   const onFilesPicked = (list: FileList | null, live: boolean) => {
     const picked = Array.from(list ?? []);
     if (picked.length === 0) return;
@@ -32,11 +34,37 @@ export default function TaskDetail({ task }: { task: any }) {
   // Tapping "Take live photo" grabs location FIRST (on the clean tap gesture, so
   // the permission prompt reliably appears), then opens the camera.
   const startLiveCapture = async () => {
+    setLocBlocked(false);
+    setGeoStatus("Getting your location…");
+    const geo = await getLocation();
+    prefetchedGeoRef.current = geo;
+    if (geo) {
+      setGeoStatus(`Location ready (±${Math.round(geo.accuracy)}m) — opening camera…`);
+      cameraRef.current?.click();
+    } else {
+      // Couldn't get location. If it's blocked, show guidance and let them
+      // choose to continue without location or fix the setting.
+      let blocked = false;
+      try {
+        const status = await (navigator as any).permissions?.query?.({ name: "geolocation" });
+        blocked = status?.state === "denied";
+      } catch {}
+      if (blocked) { setLocBlocked(true); return; } // show the help panel, don't open camera yet
+      // Not explicitly blocked (timeout/unavailable) — let them proceed anyway.
+      cameraRef.current?.click();
+    }
+  };
+
+  const captureWithoutLocation = () => { setLocBlocked(false); prefetchedGeoRef.current = null; cameraRef.current?.click(); };
+
+  // Same location-first flow, but opens the video recorder.
+  const startLiveVideo = async () => {
+    setLocBlocked(false);
     setGeoStatus("Getting your location…");
     const geo = await getLocation();
     prefetchedGeoRef.current = geo;
     if (geo) setGeoStatus(`Location ready (±${Math.round(geo.accuracy)}m) — opening camera…`);
-    cameraRef.current?.click();
+    videoRef.current?.click();
   };
 
   /** Get the device's current location at capture time. Resolves with null if
@@ -196,6 +224,14 @@ export default function TaskDetail({ task }: { task: any }) {
             className="hidden"
           />
           <input
+            ref={videoRef}
+            type="file"
+            accept="video/*"
+            capture="environment"
+            onChange={(e) => onFilesPicked(e.target.files, true)}
+            className="hidden"
+          />
+          <input
             ref={galleryRef}
             type="file"
             multiple
@@ -205,24 +241,47 @@ export default function TaskDetail({ task }: { task: any }) {
           />
         <form action={formAction} className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <h2 className="font-display text-lg font-extrabold">Submit proof</h2>
-          <p className="mt-1 text-xs text-bbb-slate">Write your report: what you did, what you found. Attach photos or a short video below.</p>
+          <p className="mt-1 text-xs text-bbb-slate">Write your report: what you did, what you found. Attach as many photos and videos as you need below.</p>
           {state?.error && <div className="mt-3"><ErrorState title="Could not submit" message={state.error} /></div>}
           <input type="hidden" name="request_id" value={task.id} />
           <input type="hidden" name="files" value={JSON.stringify(uploaded)} />
           <textarea name="note" required placeholder="Your detailed report..." className="mt-3 min-h-[140px] w-full rounded-xl border border-bbb-border p-3 text-sm outline-none focus:border-bbb-strong" />
           <div className="mt-3 rounded-2xl border border-dashed border-bbb-border p-4">
             <p className="text-sm font-bold">Photos / videos</p>
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              <button type="button" onClick={startLiveCapture} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 Take live photo</button>
+            <p className="mt-0.5 text-xs text-bbb-slate">Add as many as you like — take several photos and videos, one after another.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <button type="button" onClick={startLiveCapture} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">📷 {uploaded.length ? "Add another photo" : "Take live photo"}</button>
+              <button type="button" onClick={startLiveVideo} className="rounded-lg bg-bbb-strong px-3 py-2 font-bold text-white hover:bg-bbb-dark">🎥 Record video</button>
               <button type="button" onClick={() => galleryRef.current?.click()} className="rounded-lg border border-bbb-border px-3 py-2 font-bold text-bbb-slate hover:border-bbb-strong">Upload existing</button>
             </div>
+
+            {locBlocked && (
+              <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                <p className="font-bold">📍 Location is blocked for this site</p>
+                <p className="mt-1">Your proof is much stronger with location. To enable it: open your browser menu → <strong>Site settings</strong> → <strong>Location</strong> → set this site to <strong>Allow</strong>, then tap “Take live photo” again.</p>
+                <button type="button" onClick={captureWithoutLocation} className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 font-bold text-white">Continue without location</button>
+              </div>
+            )}
+
             {liveMode
-              ? <p className="mt-2 text-xs text-bbb-slate">Take the photo/video now, on location. We record the time and place to verify it's genuine. Please allow location access when asked.</p>
+              ? <p className="mt-2 text-xs text-bbb-slate">Capture now, on location. We record the time and place to verify it's genuine. Please allow location access when asked.</p>
               : <p className="mt-2 text-xs text-amber-600">Uploaded files can't be location-verified. Live capture is preferred for trusted proof.</p>}
             {uploading && <p className="mt-2 text-xs font-semibold text-bbb-strong">Uploading…</p>}
             {geoStatus && <p className="mt-1 text-xs font-semibold text-bbb-strong">{geoStatus}</p>}
             {uploadError && <p className="mt-2 text-xs font-semibold text-red-600">{uploadError} — please try again.</p>}
-            {uploaded.length > 0 && <p className="mt-2 text-xs font-semibold text-green-700">{uploaded.length} file{uploaded.length > 1 ? "s" : ""} attached ✓</p>}
+            {uploaded.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-bold text-green-700">{uploaded.length} item{uploaded.length > 1 ? "s" : ""} attached ✓</p>
+                <ul className="mt-1.5 space-y-1">
+                  {uploaded.map((u, i) => (
+                    <li key={i} className="flex items-center justify-between rounded-lg bg-bbb-bg px-2.5 py-1.5 text-xs">
+                      <span className="text-bbb-charcoal">{u.kind === "video" ? "🎥 Video" : "📷 Photo"} {i + 1}{u.method === "live" ? " · live" : ""}</span>
+                      <button type="button" onClick={() => setUploaded((prev) => prev.filter((_, j) => j !== i))} className="font-bold text-red-600">Remove</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <button disabled={uploading} className="mt-3 h-12 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">
             {uploading ? "Wait — finishing upload…" : uploaded.length === 0 ? "Submit report (no photo attached)" : "Submit proof for review"}
