@@ -14,8 +14,10 @@ create table if not exists recruits (
   coverage text,
   strengths text,
   tier text,                       -- 'A' | 'B' | 'C' from the assessment (optional)
-  status text not null default 'new',   -- new | qualified | invited | registered | rejected
-  invited_at timestamptz,
+  status text not null default 'new',   -- new | invited_to_apply | applied | qualified | invited_to_interview | rejected
+  invited_to_apply_at timestamptz,
+  applied_at timestamptz,
+  interview_invited_at timestamptz,
   registered_at timestamptz,
   notes text,
   created_at timestamptz not null default now(),

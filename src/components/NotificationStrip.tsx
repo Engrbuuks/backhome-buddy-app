@@ -17,7 +17,7 @@ export function NotificationStrip({ href = "/admin/notifications" }: { href?: st
       try { const c = await getUnreadCount(); if (alive) setCount(c); } catch {}
     };
     load();
-    const t = setInterval(load, 12000);
+    const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
   }, []);
 

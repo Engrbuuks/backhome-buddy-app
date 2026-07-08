@@ -51,7 +51,7 @@ export function AdminShell({ title, children }: { title: string; children: React
               {NAV.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href;
                 return (
-                  <Link key={href} href={href}
+                  <Link key={href} href={href} prefetch
                     className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition ${active ? "bg-bbb-strong text-white" : "text-bbb-slate hover:bg-bbb-bg hover:text-bbb-charcoal"}`}>
                     <Icon className="h-4 w-4 shrink-0" />
                     <span className="truncate">{label}</span>
@@ -90,7 +90,7 @@ export function AdminShell({ title, children }: { title: string; children: React
               {NAV.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href;
                 return (
-                  <Link key={href} href={href} onClick={() => setNavOpen(false)}
+                  <Link key={href} href={href} prefetch onClick={() => setNavOpen(false)}
                     className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${active ? "bg-bbb-strong text-white" : "text-bbb-slate hover:bg-bbb-bg"}`}>
                     <Icon className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{label}</span>
                   </Link>

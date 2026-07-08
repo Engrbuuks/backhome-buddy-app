@@ -26,7 +26,7 @@ export function NotificationBadge() {
       } catch {}
     };
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
   }, []);
 
