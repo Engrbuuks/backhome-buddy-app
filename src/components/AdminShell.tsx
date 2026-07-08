@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "@/lib/auth/actions";
 import {
   LayoutDashboard, Inbox, UserCheck, ShieldCheck, Wallet, RotateCcw,
-  AlertTriangle, Users, Package, MapPin, Receipt, Bell, UserCog, MessageSquare, HardDriveDownload,
+  AlertTriangle, Users, Package, MapPin, Receipt, Bell, UserCog, MessageSquare, HardDriveDownload, UserPlus,
 LogOut, Menu, X, BookOpen,
 } from "lucide-react";
 
@@ -21,6 +21,7 @@ const NAV = [
   { href: "/admin/refunds", label: "Refunds & Cancellations", icon: RotateCcw },
   { href: "/admin/disputes", label: "Disputes", icon: AlertTriangle },
   { href: "/admin/buddies", label: "Buddy Management", icon: Users },
+  { href: "/admin/recruitment", label: "Recruitment", icon: UserPlus },
   { href: "/admin/services", label: "Service Pricing", icon: Package },
   { href: "/admin/regions", label: "Regions", icon: MapPin },
   { href: "/admin/ledger", label: "Ledger", icon: Receipt },
