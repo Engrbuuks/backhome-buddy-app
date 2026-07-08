@@ -5,7 +5,8 @@ import { AdminShell } from "@/components/AdminShell";
 import { UploadCloud, ClipboardPaste, Check, X, CalendarClock, Send, Trash2, RefreshCw, FileText } from "lucide-react";
 import {
   importRecruits, setRecruitStatus, sendApplyInvite, sendAllApplyInvites,
-  syncApplied, sendInterviewInvite, sendAllInterviewInvites, deleteRecruit, type RecruitInput,
+  syncApplied, sendInterviewInvite, sendAllInterviewInvites, deleteRecruit,
+  getRecruitApplication, type RecruitInput,
 } from "@/lib/admin/recruitment-actions";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -64,6 +65,16 @@ export default function RecruitmentBoard({ initial }: { initial: any[] }) {
   const [filter, setFilter] = useState<string>("all");
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [appLinks, setAppLinks] = useState<Record<string, string | null>>({});
+
+  const toggleExpand = (r: any) => {
+    const next = expanded === r.id ? null : r.id;
+    setExpanded(next);
+    if (next && !(r.id in appLinks) && ["applied", "qualified", "invited_to_interview"].includes(r.status)) {
+      getRecruitApplication(r.id).then((res) => setAppLinks((m) => ({ ...m, [r.id]: res.buddyId })));
+    }
+  };
 
   const recruits = initial;
   const counts = useMemo(() => {
@@ -170,11 +181,12 @@ export default function RecruitmentBoard({ initial }: { initial: any[] }) {
         {shown.map((r) => (
           <div key={r.id} className="rounded-2xl border border-bbb-border bg-white p-4 shadow-soft">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 cursor-pointer" onClick={() => toggleExpand(r)}>
                 <div className="flex items-center gap-2">
-                  <p className="font-bold">{r.full_name}</p>
+                  <p className="font-bold hover:text-bbb-strong">{r.full_name}</p>
                   {r.tier && <span className="rounded bg-bbb-bg px-1.5 py-0.5 text-[10px] font-bold text-bbb-slate">Tier {r.tier}</span>}
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_STYLE[r.status] || "bg-bbb-bg"}`}>{STATUS_LABEL[r.status] || r.status}</span>
+                  <span className="text-[10px] text-bbb-slate">{expanded === r.id ? "▲" : "▼"}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-bbb-slate">{[r.email, r.phone, r.state && `${r.city || ""}${r.city ? ", " : ""}${r.state}`].filter(Boolean).join(" · ")}</p>
                 {r.coverage && <p className="mt-0.5 text-xs text-bbb-slate">Covers: {r.coverage}</p>}
@@ -215,6 +227,36 @@ export default function RecruitmentBoard({ initial }: { initial: any[] }) {
                   className="grid h-7 w-7 place-items-center rounded-lg text-bbb-slate hover:bg-red-50 hover:text-red-600 disabled:opacity-50" aria-label="Delete recruit"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             </div>
+            {expanded === r.id && (
+              <div className="mt-3 border-t border-bbb-border pt-3 text-xs">
+                <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                  <p><span className="text-bbb-slate">Full name:</span> <span className="font-semibold">{r.full_name}</span></p>
+                  <p><span className="text-bbb-slate">Tier:</span> <span className="font-semibold">{r.tier || "—"}</span></p>
+                  <p><span className="text-bbb-slate">Email:</span> <span className="font-semibold">{r.email || "—"}</span></p>
+                  <p><span className="text-bbb-slate">Phone:</span> <span className="font-semibold">{r.phone || "—"}</span></p>
+                  <p><span className="text-bbb-slate">State:</span> <span className="font-semibold">{r.state || "—"}</span></p>
+                  <p><span className="text-bbb-slate">City:</span> <span className="font-semibold">{r.city || "—"}</span></p>
+                  <p><span className="text-bbb-slate">Occupation:</span> <span className="font-semibold">{r.occupation || "—"}</span></p>
+                  <p><span className="text-bbb-slate">Availability:</span> <span className="font-semibold">{r.availability || "—"}</span></p>
+                  <p className="sm:col-span-2"><span className="text-bbb-slate">Coverage:</span> <span className="font-semibold">{r.coverage || "—"}</span></p>
+                  {r.strengths && <p className="sm:col-span-2"><span className="text-bbb-slate">Strengths:</span> <span className="font-semibold">{r.strengths}</span></p>}
+                  {r.invited_to_apply_at && <p><span className="text-bbb-slate">Invited to apply:</span> {new Date(r.invited_to_apply_at).toLocaleDateString()}</p>}
+                  {r.applied_at && <p><span className="text-bbb-slate">Applied:</span> {new Date(r.applied_at).toLocaleDateString()}</p>}
+                  {r.interview_invited_at && <p><span className="text-bbb-slate">Interview invited:</span> {new Date(r.interview_invited_at).toLocaleDateString()}</p>}
+                </div>
+                {["applied", "qualified", "invited_to_interview"].includes(r.status) && (
+                  <div className="mt-2">
+                    {appLinks[r.id] === undefined ? (
+                      <span className="text-bbb-slate">Looking up their application…</span>
+                    ) : appLinks[r.id] ? (
+                      <a href={`/admin/buddies#${appLinks[r.id]}`} className="inline-flex items-center gap-1 font-bold text-bbb-strong hover:underline">Review full application →</a>
+                    ) : (
+                      <span className="text-amber-600">No matching application found yet (they may have applied with a different email).</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
