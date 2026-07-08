@@ -4,6 +4,8 @@ import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction } from "@/lib/admin/ops-actions";
+import { DeleteButton } from "@/components/DeleteButton";
+import { deleteUser } from "@/lib/admin/proof-actions";
 import { aiScreenBuddy } from "@/lib/ai/assist-actions";
 import { BuddyFilterBar, applyBuddyFilters, EMPTY_BUDDY_FILTER, type BuddyFilterValue } from "./BuddyFilters";
 import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
@@ -199,6 +201,14 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           </div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Interview impressions, guarantor call summaries, anything future-you should know…" className="w-full rounded-xl border border-bbb-border bg-white p-3 text-sm outline-none focus:border-bbb-strong" />
           <button disabled={pending} onClick={() => run(() => saveVettingNotes(b.id, notes))} className="mt-2 rounded-lg bg-bbb-strong px-3 py-1.5 text-xs font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save notes</button>
+        </div>
+        <div className="mt-3 border-t border-bbb-border pt-3">
+          <DeleteButton
+            label="Delete this buddy"
+            confirmText={`Delete ${b.full_name || "this buddy"} permanently?`}
+            requireTyping
+            action={() => deleteUser(b.id)}
+          />
         </div>
       </div>
     </div>

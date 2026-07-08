@@ -23,11 +23,18 @@ export default function PayoutsQueue({ rows }: { rows: any[] }) {
             <article key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-bbb-border bg-white p-4 shadow-soft">
               <div className="min-w-0">
                 <p className="truncate font-semibold">{r.title}</p>
-                <p className="text-xs text-bbb-slate">{r.buddy_name} · {r.bank ? `${r.bank.bank_name} ${r.bank.bank_account_number} (${r.bank.bank_account_name})` : "no bank details"} · {formatDate(r.created_at)}</p>
+                <p className="text-xs text-bbb-slate">{r.buddy_name || "Unnamed buddy"} · {r.bank?.bank_account_number ? `${r.bank.bank_name} ${r.bank.bank_account_number} (${r.bank.bank_account_name})` : "⚠ no bank details on file"} · {formatDate(r.created_at)}</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-display font-extrabold">{formatNGN(Number(r.buddy_payout_ngn ?? 0))}</span>
-                <button disabled={pending || !r.bank?.bank_account_number} onClick={() => start(async () => { setError(""); const res = await releaseManualPayout(r.id); if (res?.error) setError(res.error); })} className="h-10 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Record payout released</button>
+                <button
+                  disabled={pending}
+                  onClick={() => start(async () => {
+                    if (!r.bank?.bank_account_number && !confirm("This buddy has no bank details on file. Only record this if you've paid them another way (cash, transfer to phone, etc.). Continue?")) return;
+                    setError(""); const res = await releaseManualPayout(r.id); if (res?.error) setError(res.error);
+                  })}
+                  className="h-10 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50"
+                >Record payout released</button>
               </div>
             </article>
           ))}

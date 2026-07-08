@@ -101,7 +101,8 @@ export async function releaseManualPayout(requestId: string) {
   if (!req.assigned_buddy_id || !req.buddy_payout_ngn) return { error: "No buddy/payout amount on this request." };
   const { data: bp } = await db.from("buddy_profiles")
     .select("bank_name, bank_account_number, bank_account_name").eq("id", req.assigned_buddy_id).single();
-  if (!bp?.bank_account_number) return { error: "Buddy has no payout bank details — they must add them first." };
+  const hasBank = Boolean(bp?.bank_account_number);
+  const method = hasBank ? "bank transfer" : "manual (no bank on file — paid another way)";
 
   const { error: poErr } = await db.from("payouts").insert({
     request_id: req.id, buddy_id: req.assigned_buddy_id, provider: "manual",
@@ -109,9 +110,9 @@ export async function releaseManualPayout(requestId: string) {
   });
   if (poErr) return { error: poErr.message.includes("duplicate") ? "Payout already recorded." : poErr.message };
   await db.from("payments").update({ funds_held: false }).eq("request_id", req.id);
-  await db.from("transactions").insert({ kind: "payout", request_id: req.id, amount_ngn: -Number(req.buddy_payout_ngn), note: "Manual payout to buddy (bank transfer)" });
-  await transition(db, req, "paid_out", p.id, "Buddy paid out (manual transfer)");
-  await db.from("audit_log").insert({ actor_id: p.id, action: "release_manual_payout", target_id: req.id, detail: { amount_ngn: req.buddy_payout_ngn, bank: bp } });
+  await db.from("transactions").insert({ kind: "payout", request_id: req.id, amount_ngn: -Number(req.buddy_payout_ngn), note: `Manual payout to buddy (${method})` });
+  await transition(db, req, "paid_out", p.id, `Buddy paid out (${method})`);
+  await db.from("audit_log").insert({ actor_id: p.id, action: "release_manual_payout", target_id: req.id, detail: { amount_ngn: req.buddy_payout_ngn, bank: bp, hasBank } });
   await notify(req.assigned_buddy_id, "You have been paid", "Your payout has been sent to your bank account.", "/buddy/earnings");
   revalidatePath("/admin/payouts"); revalidatePath(`/admin/requests/${req.id}`);
   return { error: "" };
