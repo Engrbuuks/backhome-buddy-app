@@ -109,7 +109,11 @@ RULES:
 - Output ONLY the knowledge base text — no preamble, no commentary.`;
 
   const out = await aiGenerate(system, `Raw website content:\n\n${raw}`);
-  if (out.error) return { error: `Fetched ${fetched} page(s), but AI compilation failed: ${out.error}` };
+  if (out.error) {
+    const transient = /50\d|429|529|overload|timeout|empty/i.test(out.error);
+    const hint = transient ? " This is usually a temporary AI hiccup — please click Refresh again." : "";
+    return { error: `Fetched ${fetched} page(s), but AI compilation failed: ${out.error}.${hint}` };
+  }
   const draft = (out.text || "").trim();
   if (!draft || draft.length < 200) return { error: "The AI returned too little content — try again, or edit manually." };
 
