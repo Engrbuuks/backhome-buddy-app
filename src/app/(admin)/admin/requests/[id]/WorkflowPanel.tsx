@@ -63,7 +63,7 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
         <div className="mt-4">
           <p className="text-sm font-bold">Submitted proof:</p>
           <div className="mt-2 space-y-2">{proofs.filter((p: any) => p.note).map((p: any) => <div key={p.id} className="rounded-xl bg-bbb-bg p-3 text-sm">{p.note}</div>)}</div>
-          <ProofMedia proofs={proofs} />
+          <ProofMedia proofs={proofs} canDelete />
           <div className="mt-3 flex flex-wrap gap-3">
             <button disabled={pending} onClick={() => run(() => reviewProof(request.id, true, ""))} className="h-11 rounded-xl bg-bbb-strong px-5 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Approve proof</button>
             <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="What needs fixing?" className="h-11 flex-1 rounded-xl border border-bbb-border px-3 text-sm" />
