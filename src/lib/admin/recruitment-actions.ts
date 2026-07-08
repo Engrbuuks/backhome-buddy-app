@@ -185,3 +185,16 @@ export async function deleteRecruit(id: string) {
   revalidatePath("/admin/recruitment");
   return { error: "" };
 }
+
+/** For an applied recruit, find their buddy application (by email match) so the
+ *  admin can review the full details before qualifying them for interview.
+ *  Returns the buddy_profile id (to link to admin buddy management) if found. */
+export async function getRecruitApplication(recruitId: string) {
+  const p = await admin(); if (!p) return { error: "Not authorised.", buddyId: null as string | null };
+  const db = createAdminClient();
+  const { data: r } = await db.from("recruits").select("email").eq("id", recruitId).maybeSingle();
+  if (!r?.email) return { error: "", buddyId: null };
+  const { data: prof } = await db.from("profiles").select("id, role").eq("email", r.email).maybeSingle();
+  if (!prof || prof.role !== "buddy") return { error: "", buddyId: null };
+  return { error: "", buddyId: prof.id as string };
+}

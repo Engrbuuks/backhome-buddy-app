@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listMyTasks } from "@/lib/buddy/actions";
 import { getMyProfileSummary } from "@/lib/buddy/vetting-actions";
 import { PassportPhotoUploader } from "@/components/PassportPhotoUploader";
+import { CvUploader } from "@/components/CvUploader";
 import { StatusPill } from "@/components/StatusPill";
 import { formatNGN, formatDate } from "@/components/money";
 
@@ -18,6 +19,13 @@ export default async function BuddyDashboard() {
     <div>
       {profile && (
         <div className="mb-6 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
+          {!profile.cv_path && (
+            <div className="mb-4 rounded-2xl border border-bbb-strong/30 bg-bbb-soft/40 p-4">
+              <p className="font-display text-sm font-extrabold text-bbb-dark">First step: upload your CV</p>
+              <p className="mt-0.5 mb-2 text-xs text-bbb-slate">Add your CV so we can complete your application. PDF or Word document.</p>
+              <CvUploader currentPath={profile.cv_path} />
+            </div>
+          )}
           <div className="flex items-center gap-4">
             {profile.photoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */

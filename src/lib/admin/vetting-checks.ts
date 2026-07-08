@@ -2,6 +2,7 @@
  *  Shared by server actions (approval gate) and the admin UI (checklist). */
 export const VETTING_CHECKS: ReadonlyArray<readonly [string, string]> = [
   ["nda_signed", "NDA signed by buddy (in-app)"],
+  ["cv_received", "CV received"],
   ["id_verified", "ID document verified (matches name + photo)"],
   ["nin_checked", "NIN checked"],
   ["address_verified", "Address verified (utility bill / visit)"],

@@ -46,6 +46,11 @@ export async function recordVettingDoc(_prev: unknown, formData: FormData) {
     update.id_doc_type = idDocType;
   }
   const db = createAdminClient();
+  // Uploading a CV auto-ticks the "CV received" vetting check.
+  if (kind === "cv") {
+    const { data: row } = await db.from("buddy_profiles").select("vetting_checks").eq("id", p.id).maybeSingle();
+    update.vetting_checks = { ...((row?.vetting_checks as Record<string, boolean>) ?? {}), cv_received: true };
+  }
   const { error } = await db.from("buddy_profiles").update(update).eq("id", p.id);
   if (error) return { error: error.message };
   await db.from("audit_log").insert({ actor_id: p.id, action: "vetting_doc_uploaded", detail: { kind } });
