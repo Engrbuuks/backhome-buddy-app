@@ -12,6 +12,18 @@ import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
 import { REQUESTABLE_ITEMS } from "@/lib/admin/request-documents";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
+/** Compute age in whole years from a date-of-birth string. Returns null if unparseable. */
+function ageFromDob(dob?: string): number | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+  return age >= 0 && age < 130 ? age : null;
+}
+
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 text-sm">
@@ -70,7 +82,7 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
       <div className="space-y-4">
         <div className="space-y-1.5 rounded-2xl bg-bbb-bg p-4">
           <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Application</p>
-          <Row label="Date of birth" value={b.date_of_birth} />
+          <Row label="Date of birth" value={b.date_of_birth ? `${b.date_of_birth}${ageFromDob(b.date_of_birth) !== null ? ` · ${ageFromDob(b.date_of_birth)} years old` : ""}` : undefined} />
           <Row label="NIN" value={b.nin} />
           <Row label="Address" value={b.address} />
           <Row label="State / LGA" value={[b.state, b.lga].filter(Boolean).join(" / ")} />
