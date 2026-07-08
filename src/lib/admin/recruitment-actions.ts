@@ -20,8 +20,9 @@ const CALENDLY = process.env.CALENDLY_INTERVIEW_URL || "https://calendly.com/bac
 /* Status flow:
    new → invited_to_apply → applied → qualified → invited_to_interview
    (rejected can happen from any stage)
-   Tier A/B pre-mark 'qualifies for interview' once applied — but they still
-   must APPLY first before the interview invite unlocks. */
+   NO auto-qualify: everyone must apply on the app, and YOU review each
+   application and manually mark who qualifies for interview. Tier is only a
+   hint shown on the card, never an automatic gate. */
 
 export type RecruitInput = {
   full_name: string; email?: string; phone?: string; state?: string; city?: string;
@@ -110,9 +111,9 @@ export async function syncApplied() {
   let matched = 0;
   for (const r of recruits as any[]) {
     if (applied.has((r.email || "").toLowerCase())) {
-      // Tier A/B auto-qualify for interview once applied; others go to 'applied' for review.
-      const next = (r.tier === "A" || r.tier === "B") ? "qualified" : "applied";
-      await db.from("recruits").update({ status: next, applied_at: new Date().toISOString() }).eq("id", r.id);
+      // Everyone who applies goes to 'applied' — YOU review their application
+      // and decide who qualifies for interview. Tier is only a hint, not a gate.
+      await db.from("recruits").update({ status: "applied", applied_at: new Date().toISOString() }).eq("id", r.id);
       matched++;
     }
   }
