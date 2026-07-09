@@ -139,6 +139,11 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
                     {b.nda_signed_at
                       ? <em className="ml-1 not-italic text-xs text-green-700">— signed by {b.nda_signed_name} on {new Date(b.nda_signed_at).toLocaleDateString()}</em>
                       : <em className="ml-1 not-italic text-xs text-amber-600">— awaiting buddy's signature in their portal</em>}
+                    {b.nda_signed_at && (
+                      <a href={`/admin/buddies/${b.id}/nda`} target="_blank" rel="noopener noreferrer" className="ml-2 inline-block text-xs font-bold text-bbb-strong hover:underline">
+                        View signed NDA →
+                      </a>
+                    )}
                   </span>
                 </div>
               ) : (
