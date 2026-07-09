@@ -67,7 +67,7 @@ export async function sendQuote(input: {
   });
 
   const { data: reqOwner } = await db.from("requests").select("client_id, title").eq("id", req.id).single();
-  if (reqOwner) await notify(reqOwner.client_id, "Your quote is ready", `We priced "${reqOwner.title}" — review and proceed to payment.`, `/client/requests/${req.id}`);
+  if (reqOwner) await notify(reqOwner.client_id, "Your quote is ready", `We priced "${reqOwner.title}" — review and proceed to payment.`, `/client/requests/${req.id}`, "quote_ready");
   revalidatePath(`/admin/requests/${req.id}`);
   revalidatePath("/admin/requests");
   redirect("/admin/requests");

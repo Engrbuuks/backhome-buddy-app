@@ -4,12 +4,18 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *  Every notification in this system is a major action, so both channels fire
  *  together. Email failures never break the action — they log and move on. */
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
 const FROM = process.env.EMAIL_FROM || "Backhome Buddy <notifications@backhomebuddy.ng>";
 
 function emailHtml(title: string, body: string, link?: string) {
-  const btn = link
-    ? `<a href="${APP_URL}${link}" style="display:inline-block;margin-top:20px;background:#079516;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 26px;border-radius:10px;">Open in Backhome Buddy</a>`
+  // `link` may be a relative path ("/apply") or a full URL ("https://calendly.com/..").
+  // Only prepend APP_URL for relative paths, so full URLs aren't doubled up.
+  const href = link ? (/^https?:\/\//i.test(link) ? link : `${APP_URL}${link}`) : "";
+  const label = link && /calendly\.com/i.test(link) ? "Book your interview"
+    : link && /^https?:\/\//i.test(link) && !new RegExp(APP_URL, "i").test(link) ? "Open link"
+    : "Open in Backhome Buddy";
+  const btn = href
+    ? `<a href="${href}" style="display:inline-block;margin-top:20px;background:#079516;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 26px;border-radius:10px;">${label}</a>`
     : "";
   return `<!doctype html><html><body style="margin:0;padding:0;background:#F6F8F6;font-family:Arial,Helvetica,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F8F6;padding:28px 12px;"><tr><td align="center">
@@ -61,8 +67,14 @@ async function sendEmail(to: string, subject: string, body: string, link?: strin
   }
 }
 
-/** In-app notification + email for a single user. */
-export async function notify(userId: string, title: string, body: string, link?: string) {
+/** In-app notification + email for a single user. Optionally pass a `typeKey`
+ *  to make it respect the admin notification settings (on/off, custom wording,
+ *  recipient override). Without a typeKey it behaves as before (always sends). */
+export async function notify(userId: string, title: string, body: string, link?: string, typeKey?: string) {
+  if (typeKey) {
+    await notifyTyped({ typeKey, userId, subject: title, body, link });
+    return;
+  }
   const db = createAdminClient();
   await db.from("notifications").insert({ user_id: userId, title, body, link: link ?? null });
   const { data: p } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
@@ -84,5 +96,70 @@ export async function notifyAdmins(title: string, body: string, link?: string) {
   await db.from("notifications").insert(admins.map((a) => ({ user_id: a.id, title, body, link: link ?? null })));
   for (const a of admins) {
     if (a.email) await sendEmail(a.email, title, body, link);
+  }
+}
+
+/** Settings-aware notification. Looks up the type's config: skips the email if
+ *  disabled, applies custom subject/body if set, and routes to the right
+ *  recipient (the user, an override, or the team addresses). Always still writes
+ *  the in-app notification row for user-facing types so nothing is lost in-app. */
+export async function notifyTyped(opts: {
+  typeKey: string;
+  userId?: string;          // the user this concerns (for in-app + default recipient)
+  subject?: string;         // fallback subject if no override configured
+  body: string;
+  link?: string;
+}) {
+  const { getNotifSettings, defFor } = await import("@/lib/notifications/config");
+  const settings = await getNotifSettings();
+  const def = defFor(opts.typeKey);
+  const cfg = settings.types[opts.typeKey] || { enabled: true };
+  const db = createAdminClient();
+
+  const subject = (cfg.subject && cfg.subject.trim()) || opts.subject || def?.defaultSubject || "Backhome Buddy";
+  const body = (cfg.body && cfg.body.trim()) || opts.body;
+
+  // Always record the in-app notification for user-facing types (channel of record).
+  if (opts.userId && def?.audience !== "team") {
+    await db.from("notifications").insert({ user_id: opts.userId, title: subject, body, link: opts.link ?? null });
+  }
+
+  // Email is optional and switchable.
+  if (!cfg.enabled) return;
+
+  // Resolve recipient(s).
+  let recipients: string[] = [];
+  if (def?.audience === "team") {
+    recipients = settings.teamEmails.filter(Boolean);
+  } else if (cfg.recipientOverride && cfg.recipientOverride.trim()) {
+    recipients = [cfg.recipientOverride.trim()];
+  } else if (opts.userId) {
+    const { data: p } = await db.from("profiles").select("email").eq("id", opts.userId).maybeSingle();
+    if (p?.email) recipients = [p.email];
+  }
+  if (recipients.length === 0) return;
+
+  const from = (settings.fromAddress && settings.fromAddress.trim()) || undefined;
+  const replyTo = (settings.replyTo && settings.replyTo.trim()) || undefined;
+  for (const to of recipients) {
+    await sendConfiguredEmail(to, subject, body, opts.link, from, replyTo);
+  }
+}
+
+/** Like sendBrandedEmail but with optional from/reply-to overrides. */
+async function sendConfiguredEmail(to: string, subject: string, body: string, link?: string, fromOverride?: string, replyTo?: string) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || !to) return;
+  try {
+    const payload: any = { from: fromOverride || FROM, to: [to], subject, html: emailHtml(subject, body, link) };
+    if (replyTo) payload.reply_to = replyTo;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
+  } catch (e) {
+    console.error("Email send error:", e);
   }
 }

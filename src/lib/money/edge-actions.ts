@@ -93,8 +93,8 @@ export async function resolveDispute(disputeId: string, outcome: "refund" | "rel
   const { data: r6 } = await db.from("requests").select("client_id, assigned_buddy_id, title").eq("id", req.id).single();
   if (r6) {
     const msg = outcome === "refund" ? "resolved with a refund to you" : outcome === "release" ? "resolved — work accepted" : "resolved — work resumes";
-    await notify(r6.client_id, "Dispute resolved", `Your issue on "${r6.title}" was ${msg}.`, `/client/requests/${req.id}`);
-    if (r6.assigned_buddy_id) await notify(r6.assigned_buddy_id, "Dispute resolved", `Outcome: ${outcome}.`, `/buddy/tasks/${req.id}`);
+    await notify(r6.client_id, "Dispute resolved", `Your issue on "${r6.title}" was ${msg}.`, `/client/requests/${req.id}`, "dispute_resolved");
+    if (r6.assigned_buddy_id) await notify(r6.assigned_buddy_id, "Dispute resolved", `Outcome: ${outcome}.`, `/buddy/tasks/${req.id}`, "dispute_resolved");
   }
   revalidatePath("/admin/disputes"); revalidatePath("/admin/payouts");
   return { error: "" };

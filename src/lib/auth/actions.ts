@@ -47,7 +47,7 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   const supabase = createClient();
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
   const { error } = await supabase.auth.signUp({
     email, password,
     options: { data: { full_name: fullName }, emailRedirectTo: appUrl },
@@ -118,7 +118,7 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   if (!declareTrue) return { error: "Confirm that the information you provided is true." };
 
   const supabase = createClient();
-  const buddyAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
+  const buddyAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
   const { data, error } = await supabase.auth.signUp({
     email, password,
     options: { data: { full_name: fullName }, emailRedirectTo: buddyAppUrl },
@@ -157,7 +157,7 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
 export async function requestPasswordReset(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email address." };
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.NG";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
   const supabase = createClient();
   await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/reset-password` });
   return { error: "", done: true };

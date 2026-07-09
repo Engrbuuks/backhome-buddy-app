@@ -17,7 +17,7 @@ export async function confirmCompletion(requestId: string) {
   await db.from("request_timeline").insert({ request_id: req.id, from_status: req.status, to_status: "completed", actor_id: p.id, note: "Client confirmed completion" });
   await db.from("audit_log").insert({ actor_id: p.id, action: "confirm_completion", target_id: req.id });
   const { data: r4 } = await db.from("requests").select("assigned_buddy_id, title").eq("id", req.id).single();
-  if (r4?.assigned_buddy_id) await notify(r4.assigned_buddy_id, "Client confirmed completion", "Your payout is now eligible for release.", `/buddy/tasks/${req.id}`);
+  if (r4?.assigned_buddy_id) await notify(r4.assigned_buddy_id, "Client confirmed completion", "Your payout is now eligible for release.", `/buddy/tasks/${req.id}`, "client_confirmed");
   await notifyAdmins("Payout eligible", `"${r4?.title ?? "A task"}" is client-confirmed — release the payout.`, "/admin/payouts");
   revalidatePath(`/client/requests/${requestId}`);
   return { error: "" };

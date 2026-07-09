@@ -29,7 +29,7 @@ const NAV = [
   { href: "/admin/chats", label: "Support Chats", icon: MessageSquare },
   { href: "/admin/knowledge", label: "Knowledge Base", icon: BookOpen },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
-  { href: "/admin/templates", label: "Templates", icon: Bell },
+  { href: "/admin/templates", label: "Email Settings", icon: Bell },
   { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/backup", label: "Backup", icon: HardDriveDownload },
 ];

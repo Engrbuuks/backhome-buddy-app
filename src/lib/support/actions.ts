@@ -93,7 +93,7 @@ export async function staffReply(_prev: unknown, formData: FormData) {
   // A human has taken over — silence the website AI for this thread.
   await db.from("chat_threads").update({ last_message_at: new Date().toISOString(), ai_enabled: false }).eq("id", threadId);
   const { data: t } = await db.from("chat_threads").select("user_id").eq("id", threadId).single();
-  if (t?.user_id) await notify(t.user_id, "New reply from our team", content.slice(0, 120), "/client/support");
+  if (t?.user_id) await notify(t.user_id, "New reply from our team", content.slice(0, 120), "/client/support", "new_reply");
   revalidatePath(`/admin/chats/${threadId}`); revalidatePath("/admin/chats");
   return { error: "" };
 }

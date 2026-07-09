@@ -36,7 +36,7 @@ export async function recordManualPayment(requestId: string) {
   await transition(db, req, "awaiting_pay", p.id, "Offline payment being recorded");
   await transition(db, req, "paid", p.id, "Payment received (bank transfer) — funds held");
   await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_payment", target_id: req.id, detail: { amount_ngn: req.client_price_ngn } });
-  await notify(req.client_id, "Payment received", "Your payment is confirmed and held securely. We are assigning your buddy.", `/client/requests/${req.id}`);
+  await notify(req.client_id, "Payment received", "Your payment is confirmed and held securely. We are assigning your buddy.", `/client/requests/${req.id}`, "payment_received");
   revalidatePath(`/admin/requests/${req.id}`); revalidatePath("/admin/requests");
   return { error: "" };
 }
@@ -61,8 +61,8 @@ export async function assignBuddy(requestId: string, buddyId: string) {
   await transition(db, req, "assigned", p.id, "Buddy assigned");
   await db.from("audit_log").insert({ actor_id: p.id, action: "assign_buddy", target_id: req.id, detail: { buddyId } });
   const { data: r2 } = await db.from("requests").select("client_id, title").eq("id", req.id).single();
-  await notify(buddyId, "New task assigned", `You have a new task: "${r2?.title ?? "task"}". Open it to start.`, `/buddy/tasks/${req.id}`);
-  if (r2) await notify(r2.client_id, "Buddy assigned", "A vetted buddy is now on your request.", `/client/requests/${req.id}`);
+  await notify(buddyId, "New task assigned", `You have a new task: "${r2?.title ?? "task"}". Open it to start.`, `/buddy/tasks/${req.id}`, "task_assigned_buddy");
+  if (r2) await notify(r2.client_id, "Buddy assigned", "A vetted buddy is now on your request.", `/client/requests/${req.id}`, "buddy_assigned_client");
   revalidatePath(`/admin/requests/${req.id}`); revalidatePath("/admin/requests");
   return { error: "" };
 }
@@ -80,10 +80,10 @@ export async function reviewProof(requestId: string, approve: boolean, note: str
   const { data: r3 } = await db.from("requests").select("client_id, assigned_buddy_id, title").eq("id", req.id).single();
   if (r3) {
     if (approve) {
-      await notify(r3.client_id, "Proof approved — please confirm", `Review the proof for "${r3.title}" and confirm completion.`, `/client/requests/${req.id}`);
+      await notify(r3.client_id, "Proof approved — please confirm", `Review the proof for "${r3.title}" and confirm completion.`, `/client/requests/${req.id}`, "proof_approved_confirm");
       if (r3.assigned_buddy_id) await notify(r3.assigned_buddy_id, "Proof approved", "Awaiting client confirmation — payout follows.", `/buddy/tasks/${req.id}`);
     } else if (r3.assigned_buddy_id) {
-      await notify(r3.assigned_buddy_id, "Changes requested", note || "Please revise and resubmit your proof.", `/buddy/tasks/${req.id}`);
+      await notify(r3.assigned_buddy_id, "Changes requested", note || "Please revise and resubmit your proof.", `/buddy/tasks/${req.id}`, "changes_requested");
     }
   }
   revalidatePath(`/admin/requests/${req.id}`); revalidatePath("/admin/requests");

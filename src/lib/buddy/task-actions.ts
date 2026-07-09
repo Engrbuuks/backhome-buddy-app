@@ -26,7 +26,7 @@ export async function startTask(requestId: string) {
   const db = createAdminClient();
   await transition(db, req, "in_progress", p.id, "Buddy started the task");
   const { data: rOwn } = await db.from("requests").select("client_id, title").eq("id", requestId).single();
-  if (rOwn) await notify(rOwn.client_id, "Work has started", `Your buddy started "${rOwn.title}".`, `/client/requests/${requestId}`);
+  if (rOwn) await notify(rOwn.client_id, "Work has started", `Your buddy started "${rOwn.title}".`, `/client/requests/${requestId}`, "work_started");
   revalidatePath(`/buddy/tasks/${requestId}`); revalidatePath("/buddy/dashboard");
   return { error: "" };
 }
