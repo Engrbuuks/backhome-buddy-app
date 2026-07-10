@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useTransition, useMemo } from "react";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
+import CompetencyEditor from "@/components/CompetencyEditor";
+import InterviewLauncher from "@/components/InterviewLauncher";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction } from "@/lib/admin/ops-actions";
@@ -219,6 +221,8 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} placeholder="Interview impressions, guarantor call summaries, anything future-you should know…" className="w-full rounded-xl border border-bbb-border bg-white p-3 text-sm outline-none focus:border-bbb-strong" />
           <button disabled={pending} onClick={() => run(() => saveVettingNotes(b.id, notes))} className="mt-2 rounded-lg bg-bbb-strong px-3 py-1.5 text-xs font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save notes</button>
         </div>
+        <InterviewLauncher buddyId={b.id} name={b.full_name} email={b.profiles?.email} />
+        <CompetencyEditor buddy={b} />
         <div className="mt-3 border-t border-bbb-border pt-3">
           <DeleteButton
             label="Delete this buddy"

@@ -2,6 +2,7 @@
 import React, { useState, useTransition } from "react";
 import { ErrorState } from "@/components/StateBlocks";
 import { recordManualPayment, assignBuddy, reviewProof } from "@/lib/admin/workflow-actions";
+import BestFitBuddies from "./BestFitBuddies";
 import { ProofMedia } from "@/components/ProofMedia";
 
 export default function WorkflowPanel({ request, buddies }: { request: any; buddies: any[] }) {
@@ -33,6 +34,7 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
       {request.status === "paid" && (
         <div className="mt-4">
           <p className="text-sm text-bbb-slate">Funds held. Assign an approved buddy{request.regions?.name ? ` — suggested in ${request.regions.name}` : ""}.</p>
+          <div className="mt-3"><BestFitBuddies requestId={request.id} onPick={(id) => setBuddyId(id)} /></div>
           {(() => {
             const reqState = (request.regions?.name ?? "").toLowerCase();
             const local = reqState ? buddies.filter((b: any) => (b.state ?? "").toLowerCase() === reqState || (b.coverage_areas ?? "").toLowerCase().includes(reqState)) : [];

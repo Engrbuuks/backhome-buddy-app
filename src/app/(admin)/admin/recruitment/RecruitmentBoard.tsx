@@ -1,4 +1,5 @@
 "use client";
+import InterviewLauncher from "@/components/InterviewLauncher";
 import React, { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AdminShell } from "@/components/AdminShell";
@@ -255,6 +256,9 @@ export default function RecruitmentBoard({ initial }: { initial: any[] }) {
                     )}
                   </div>
                 )}
+                <div className="mt-3 border-t border-bbb-border pt-3">
+                  <InterviewLauncher recruitId={r.id} buddyId={appLinks[r.id] || undefined} name={r.full_name} email={r.email} />
+                </div>
               </div>
             )}
           </div>
