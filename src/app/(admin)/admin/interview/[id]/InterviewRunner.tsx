@@ -3,7 +3,8 @@ import React, { useMemo, useState, useTransition, useEffect, useRef } from "reac
 import { useRouter } from "next/navigation";
 import { Check, Star, AlertTriangle, ChevronRight, Save, Flag } from "lucide-react";
 import { INTERVIEW } from "@/lib/admin/interview-catalog";
-import { saveInterview, completeInterview, summarize, type AnswerMap, type InterviewData } from "@/lib/admin/interview-actions";
+import { saveInterview, completeInterview, type AnswerMap, type InterviewData } from "@/lib/admin/interview-actions";
+import { summarize } from "@/lib/admin/competency-helpers";
 
 const TASK_TYPES = [
   { key: "property", label: "Property & land" },

@@ -2,21 +2,11 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
+import { taskTypeToDimension } from "@/lib/admin/competency-helpers";
 
 async function admin() {
   const p = await getCurrentProfile();
   return p && p.role === "admin" ? p : null;
-}
-
-/** Map a service type name to a competency dimension, so a task can be matched
- *  to the right buddy strength. Extend as your service catalog grows. */
-export function taskTypeToDimension(serviceName?: string): keyof CompScores | null {
-  const s = (serviceName || "").toLowerCase();
-  if (/propert|land|inspect|verif|house|building/.test(s)) return "comp_property";
-  if (/welfare|visit|check|family|elder|care/.test(s)) return "comp_welfare";
-  if (/document|office|govern|paper|certificate|registrat/.test(s)) return "comp_documents";
-  if (/purchase|buy|market|shop|deliver|errand/.test(s)) return "comp_purchases";
-  return null;
 }
 
 export type CompScores = {

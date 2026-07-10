@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
 import { ALL_QUESTIONS, isHonesty } from "@/lib/admin/interview-catalog";
+import { summarize } from "@/lib/admin/competency-helpers";
 
 async function admin() {
   const p = await getCurrentProfile();
@@ -69,19 +70,7 @@ export async function saveInterview(id: string, patch: Partial<InterviewData>) {
   return { error: "" };
 }
 
-/** Compute a simple overall score + suggested decision from the answers. */
-export function summarize(answers: AnswerMap, proofScore: number | null) {
-  const scored = Object.entries(answers).filter(([, a]) => typeof a.score === "number");
-  const total = scored.reduce((s, [, a]) => s + (a.score || 0), 0);
-  const avg = scored.length ? total / scored.length : 0;
-  // Any honesty question scored 1-2 is a hard flag.
-  const honestyFlag = scored.some(([k, a]) => isHonesty(k) && (a.score || 0) <= 2);
-  const proofFail = proofScore != null && proofScore <= 2;
-  let decision: "advance" | "trial" | "decline" = "advance";
-  if (honestyFlag || proofFail) decision = "decline";
-  else if (avg < 3.2) decision = "trial";
-  return { overall: Math.round(avg * 20), decision, honestyFlag, proofFail, answered: scored.length };
-}
+/** Compute overall score + suggested decision — see competency-helpers. */
 
 /** Complete the interview: mark done and SYNC competency into the buddy profile
  *  (if this is a buddy), so the task-fit matcher immediately benefits. */
