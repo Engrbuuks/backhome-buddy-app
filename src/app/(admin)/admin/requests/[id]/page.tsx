@@ -1,3 +1,4 @@
+import MarkNotificationsRead from "@/components/MarkNotificationsRead";
 import { notFound } from "next/navigation";
 import { getRequestForAdmin } from "@/lib/admin/quote-actions";
 import { listApprovedBuddies } from "@/lib/admin/workflow-actions";
@@ -23,7 +24,7 @@ export default async function AdminRequestPage({ params }: { params: { id: strin
       request={request}
       expectations={request.expectations}
       urgentSurchargePct={urgentPct}
-      actionSlot={<><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
+      actionSlot={<><MarkNotificationsRead link={`/admin/requests/${request.id}`} /><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
     />
   );
 }

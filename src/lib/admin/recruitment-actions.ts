@@ -173,7 +173,7 @@ export async function sendAllInterviewInvites() {
 export async function listRecruits() {
   const p = await admin(); if (!p) return [];
   const db = createAdminClient();
-  const { data } = await db.from("recruits").select("*").order("created_at", { ascending: false });
+  const { data } = await db.from("recruits").select("*").order("created_at", { ascending: false }).limit(300);
   return data ?? [];
 }
 

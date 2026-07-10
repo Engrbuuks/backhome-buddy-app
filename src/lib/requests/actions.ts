@@ -89,14 +89,17 @@ export async function listMyRequests() {
 }
 
 // Admin: all requests (RLS "admin reads all requests" allows it).
-export async function listAllRequests() {
+export async function listAllRequests(page = 1, pageSize = 20) {
   const supabase = createClient();
-  const { data, error } = await supabase
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await supabase
     .from("requests")
-    .select("id, title, status, urgency, client_price_ngn, created_at, service_types(name), profiles!requests_client_id_fkey(full_name, email)")
-    .order("created_at", { ascending: false });
+    .select("id, title, status, urgency, client_price_ngn, created_at, service_types(name), profiles!requests_client_id_fkey(full_name, email)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
   if (error) throw new Error(error.message);
-  return data ?? [];
+  return { rows: data ?? [], total: count ?? 0 };
 }
 
 // One request with its quote items + proofs (RLS scopes who can see it).

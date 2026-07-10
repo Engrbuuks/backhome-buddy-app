@@ -41,13 +41,13 @@ export function AdminShell({ title, children }: { title: string; children: React
     <div className="min-h-screen bg-bbb-bg">
       <div className="mx-auto flex max-w-[1280px] gap-6 p-4">
         <aside className="hidden w-60 shrink-0 lg:block">
-          <div className="sticky top-4 rounded-3xl border border-bbb-border bg-white p-3 shadow-soft">
+          <div className="sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col rounded-3xl border border-bbb-border bg-white p-3 shadow-soft">
             <div className="mb-3 px-3 py-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/images/logo.png" alt="Backhome Buddy" className="h-8 w-auto" />
               <p className="mt-1 text-xs text-bbb-slate">Ops Admin</p>
             </div>
-            <nav className="space-y-1">
+            <nav className="-mr-1 flex-1 space-y-1 overflow-y-auto pr-1">
               {NAV.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href;
                 return (
@@ -60,7 +60,7 @@ export function AdminShell({ title, children }: { title: string; children: React
                 );
               })}
             </nav>
-            <div className="mt-2 border-t border-bbb-border pt-2">
+            <div className="mt-2 shrink-0 border-t border-bbb-border pt-2">
               <form action={signOut}>
                 <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-bbb-slate transition hover:bg-bbb-bg hover:text-red-600">
                   <LogOut className="h-4 w-4 shrink-0" /><span>Logout</span>

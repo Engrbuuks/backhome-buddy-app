@@ -9,12 +9,15 @@ async function admin() {
   return p && p.role === "admin" ? p : null;
 }
 
-export async function listBuddies() {
-  if (!(await admin())) return [];
+export async function listBuddies(page = 1, pageSize = 20) {
+  if (!(await admin())) return { rows: [], total: 0 };
   const db = createAdminClient();
-  const { data } = await db.from("buddy_profiles")
-    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, proof_test_score, comp_property, comp_welfare, comp_documents, comp_purchases, comp_communication, comp_reliability, competency_specialisms, competency_notes, approved_task_types, profiles!buddy_profiles_id_fkey(full_name, email, phone)")
-    .order("created_at", { ascending: false });
+  const from = (Math.max(1, page) - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, count } = await db.from("buddy_profiles")
+    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, proof_test_score, comp_property, comp_welfare, comp_documents, comp_purchases, comp_communication, comp_reliability, competency_specialisms, competency_notes, approved_task_types, profiles!buddy_profiles_id_fkey(full_name, email, phone)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
   const buddies = data ?? [];
   // Short-lived signed URLs for vetting documents (admin-only view).
   const paths = buddies.flatMap((b: any) => [b.id_doc_path, b.utility_bill_path, b.pcc_path, b.passport_photo_path, b.nin_slip_path, b.cv_path]).filter(Boolean) as string[];
@@ -39,7 +42,7 @@ export async function listBuddies() {
       b.cv_url = b.cv_path ? urlOf.get(b.cv_path) : undefined;
     }
   }
-  return buddies;
+  return { rows: buddies, total: count ?? buddies.length };
 }
 
 export async function updateVettingCheck(buddyId: string, key: string, value: boolean) {
@@ -110,13 +113,16 @@ export async function listLedger() {
   return data ?? [];
 }
 
-export async function listRequestsByStatus(statuses: string[]) {
-  if (!(await admin())) return [];
+export async function listRequestsByStatus(statuses: string[], page = 1, pageSize = 20) {
+  if (!(await admin())) return { rows: [], total: 0 };
   const db = createAdminClient();
-  const { data } = await db.from("requests")
-    .select("id, title, status, client_price_ngn, buddy_payout_ngn, created_at, profiles!requests_client_id_fkey(full_name)")
-    .in("status", statuses).order("created_at", { ascending: false });
-  return data ?? [];
+  const from = (Math.max(1, page) - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, count } = await db.from("requests")
+    .select("id, title, status, client_price_ngn, buddy_payout_ngn, created_at, profiles!requests_client_id_fkey(full_name)", { count: "exact" })
+    .in("status", statuses).order("created_at", { ascending: false })
+    .range(from, to);
+  return { rows: data ?? [], total: count ?? 0 };
 }
 
 /** Email a buddy a checklist of the selected documents/items, asking them to

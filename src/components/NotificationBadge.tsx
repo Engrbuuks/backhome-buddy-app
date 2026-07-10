@@ -27,7 +27,9 @@ export function NotificationBadge() {
     };
     load();
     const t = setInterval(load, 60000);
-    return () => { alive = false; clearInterval(t); };
+    const onChange = () => load();
+    window.addEventListener("notifications:changed", onChange);
+    return () => { alive = false; clearInterval(t); window.removeEventListener("notifications:changed", onChange); };
   }, []);
 
   if (!count) return null;

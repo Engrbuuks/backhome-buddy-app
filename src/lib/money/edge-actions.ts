@@ -106,7 +106,7 @@ export async function listRefundQueue() {
   const db = createAdminClient();
   const { data } = await db.from("requests")
     .select("id, title, status, client_price_ngn, created_at, profiles!requests_client_id_fkey(full_name)")
-    .in("status", ["cancelled"]).order("updated_at", { ascending: true });
+    .in("status", ["cancelled"]).order("updated_at", { ascending: true }).limit(100);
   // only those with held funds
   const out: any[] = [];
   for (const r of data ?? []) {
@@ -122,6 +122,6 @@ export async function listOpenDisputes() {
   const db = createAdminClient();
   const { data } = await db.from("disputes")
     .select("id, reason, created_at, requests(id, title, status, client_price_ngn)")
-    .eq("status", "open").order("created_at", { ascending: true });
+    .eq("status", "open").order("created_at", { ascending: true }).limit(100);
   return data ?? [];
 }

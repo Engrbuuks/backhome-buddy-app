@@ -123,7 +123,7 @@ export async function listPayoutQueue() {
   const db = createAdminClient();
   const { data: reqs } = await db.from("requests")
     .select("id, title, status, buddy_payout_ngn, assigned_buddy_id, created_at")
-    .eq("status", "completed").order("updated_at", { ascending: true });
+    .eq("status", "completed").order("updated_at", { ascending: true }).limit(100);
   const ids = Array.from(new Set((reqs ?? []).map((r) => r.assigned_buddy_id).filter(Boolean)));
   const { data: profs } = ids.length ? await db.from("profiles").select("id, full_name").in("id", ids) : { data: [] as any[] };
   const nameOf = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
