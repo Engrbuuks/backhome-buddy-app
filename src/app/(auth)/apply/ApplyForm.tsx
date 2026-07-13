@@ -64,6 +64,7 @@ export default function ApplyForm() {
       if (!v.date_of_birth) return "Enter your date of birth.";
       const age = (Date.now() - new Date(v.date_of_birth).getTime()) / 31557600000;
       if (!(age >= 18)) return "You must be at least 18 years old to apply.";
+      if (age > 80) return "Applicants must be 80 or under. If you believe this is a mistake, please check your date of birth — or contact support.";
       if (v.nin.replace(/\D/g, "").length !== 11) return "Your NIN is 11 digits — check and re-enter.";
     }
     if (i === 1) {
@@ -117,8 +118,8 @@ export default function ApplyForm() {
       </div>
 
       <div ref={errorRef}>
-        {stepError && <div className="mb-4"><ErrorState title="One more thing" message={stepError} /></div>}
-        {state?.error && <div className="mb-4"><ErrorState title="Could not submit" message={state.error} /></div>}
+        {stepError && <div className="mb-4"><ErrorState title="Please fix this to continue" message={stepError} /></div>}
+        {state?.error && <div className="mb-4"><ErrorState title="We couldn't submit your application" message={state.error} /></div>}
       </div>
 
       <form
@@ -126,9 +127,20 @@ export default function ApplyForm() {
         action={formAction}
         noValidate
         onSubmit={(e) => {
-          const err = validateStep(2);
-          if (err) { e.preventDefault(); setStepError(err); }
-          else setStepError("");
+          // Validate EVERY step, not just the last one. If an earlier step has a
+          // problem (e.g. they went Back and changed something), jump them to it
+          // and show why — so they're never stuck without a reason.
+          for (let i = 0; i <= 2; i++) {
+            const err = validateStep(i);
+            if (err) {
+              e.preventDefault();
+              setStepError(i === step ? err : `${err} (Step ${i + 1})`);
+              if (i !== step) setStep(i);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              return;
+            }
+          }
+          setStepError("");
         }}
         className="space-y-4"
       >

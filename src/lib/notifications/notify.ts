@@ -14,8 +14,16 @@ function emailHtml(title: string, body: string, link?: string) {
   const label = link && /calendly\.com/i.test(link) ? "Book your interview"
     : link && /^https?:\/\//i.test(link) && !new RegExp(APP_URL, "i").test(link) ? "Open link"
     : "Open in Backhome Buddy";
+  // Bulletproof table-based button — renders and clicks reliably across Gmail,
+  // Outlook, Apple Mail and mobile webviews (a styled <a> can be swallowed by
+  // some clients' sandboxed preview frames).
   const btn = href
-    ? `<a href="${href}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:20px;background:#079516;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 26px;border-radius:10px;">${label}</a>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0;"><tr>
+        <td align="center" bgcolor="#079516" style="background:#079516;border-radius:10px;">
+          <a href="${href}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;padding:13px 28px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:10px;">${label}</a>
+        </td>
+      </tr></table>`
     : "";
   return `<!doctype html><html><body style="margin:0;padding:0;background:#F6F8F6;font-family:Arial,Helvetica,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F8F6;padding:28px 12px;"><tr><td align="center">
@@ -27,7 +35,7 @@ function emailHtml(title: string, body: string, link?: string) {
         <h1 style="margin:0 0 12px;font-size:19px;color:#1D1D1F;">${title}</h1>
         <p style="margin:0;font-size:14px;line-height:1.7;color:#444;">${body}</p>
         ${btn}
-        ${href ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#737375;">Or copy and paste this link into your browser:<br><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#079516;word-break:break-all;">${href}</a></p>` : ""}
+        ${href ? `<p style="margin:18px 0 0;padding:12px;background:#F6F8F6;border-radius:8px;font-size:12px;line-height:1.6;color:#444;">If the button doesn't open, copy and paste this link into your browser:<br><a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#079516;font-weight:700;word-break:break-all;">${href}</a></p>` : ""}
       </td></tr>
       <tr><td style="padding:18px 28px;border-top:1px solid #E6E7E8;">
         <p style="margin:0;font-size:11px;line-height:1.6;color:#737375;">Your tasks handled right — with proof. This email was sent because of activity on your Backhome Buddy account. Need help? Reply to this email or visit <a href="https://backhomebuddy.ng" target="_blank" rel="noopener noreferrer" style="color:#079516;">backhomebuddy.ng</a>.</p>

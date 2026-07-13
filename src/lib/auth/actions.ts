@@ -105,7 +105,8 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   if (!dob) return { error: "Enter your date of birth." };
   const age = (Date.now() - new Date(dob).getTime()) / 31557600000;
-  if (!(age >= 18) || age > 80) return { error: "You must be at least 18 years old to apply." };
+  if (!(age >= 18)) return { error: "You must be at least 18 years old to apply." };
+  if (age > 80) return { error: "Applicants must be 80 or under. Please check your date of birth — if it's correct and you'd still like to apply, contact support." };
   if (nin.length !== 11) return { error: "Enter your 11-digit NIN (National Identification Number)." };
   if (!address || !stateName || !lga) return { error: "Enter your residential address, state and LGA." };
   if (!occupation) return { error: "Tell us your current occupation." };
