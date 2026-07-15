@@ -2,6 +2,7 @@
 import React from "react";
 import { useFormState } from "react-dom";
 import { Field } from "@/components/FormControls";
+import ProfileGeoFields from "@/components/ProfileGeoFields";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { updateMyProfile } from "@/lib/client/actions";
@@ -68,11 +69,13 @@ export default function BuddyProfileForm({ profile, buddy, photoUrl }: { profile
         {(dState as any)?.saved && <div className="rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700">Details saved.</div>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="City" name="city" defaultValue={buddy?.city ?? ""} />
-          <Field label="State" name="state" defaultValue={buddy?.state ?? ""} />
-          <Field label="LGA" name="lga" defaultValue={buddy?.lga ?? ""} />
           <Field label="Occupation" name="occupation" defaultValue={buddy?.occupation ?? ""} />
         </div>
-        <Field label="Coverage areas (comma-separated)" name="coverage_areas" defaultValue={(buddy?.coverage_areas ?? []).join(", ")} placeholder="Awgu, Enugu, Nsukka" />
+        <ProfileGeoFields
+          state={buddy?.state ?? ""}
+          lga={buddy?.lga ?? ""}
+          coverage={Array.isArray(buddy?.coverage_areas) ? buddy.coverage_areas : (buddy?.coverage_areas ? String(buddy.coverage_areas).split(/[;,]/).map((s: string) => s.trim()).filter(Boolean) : [])}
+        />
         <div>
           <label className="mb-1 block text-sm font-bold text-bbb-charcoal">Availability</label>
           <select name="availability" defaultValue={buddy?.availability ?? ""} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong">

@@ -56,7 +56,13 @@ export async function updateBuddyDetails(_prev: unknown, formData: FormData) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "buddy") return { error: "Not authorized." };
   const g = (k: string) => String(formData.get(k) || "").trim();
-  const coverage = g("coverage_areas").split(",").map((s) => s.trim()).filter(Boolean);
+  const covRaw = g("coverage_areas");
+  let coverage: string[] = [];
+  if (covRaw.startsWith("[")) {
+    try { coverage = JSON.parse(covRaw).filter((x: unknown) => typeof x === "string"); } catch { coverage = []; }
+  } else if (covRaw) {
+    coverage = covRaw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+  }
 
   const update: Record<string, unknown> = {
     id: p.id,

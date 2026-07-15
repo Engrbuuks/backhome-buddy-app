@@ -82,7 +82,16 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   const address = String(formData.get("address") || "").slice(0, 240).trim();
   const stateName = String(formData.get("state") || "").slice(0, 60).trim();
   const lga = String(formData.get("lga") || "").slice(0, 80).trim();
-  const coverage = String(formData.get("coverage_areas") || "").slice(0, 300).trim();
+  const coverageRaw = String(formData.get("coverage_areas") || "").slice(0, 2000).trim();
+  // coverage_areas arrives as a JSON array (from the multi-select). Fall back to
+  // comma text for safety. Stored as a real text[] array.
+  let coverageArr: string[] = [];
+  if (coverageRaw.startsWith("[")) {
+    try { coverageArr = JSON.parse(coverageRaw).filter((x: unknown) => typeof x === "string"); } catch { coverageArr = []; }
+  } else if (coverageRaw) {
+    coverageArr = coverageRaw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+  }
+  const coverage = coverageArr.slice(0, 100);
   const occupation = String(formData.get("occupation") || "").slice(0, 120).trim();
   const experience = String(formData.get("experience") || "").slice(0, 1500).trim();
   const availability = String(formData.get("availability") || "").slice(0, 40).trim();

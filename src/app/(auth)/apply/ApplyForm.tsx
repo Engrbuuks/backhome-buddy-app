@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Field, SelectField, TextAreaField } from "@/components/FormControls";
+import { StateLgaSelect, LgaMultiSelect } from "@/components/GeoSelects";
 import { ErrorState } from "@/components/StateBlocks";
 import { signUpBuddy } from "@/lib/auth/actions";
 
@@ -35,6 +36,7 @@ export default function ApplyForm() {
   const [state, formAction] = useFormState(signUpBuddy, { error: "" });
   const [step, setStep] = useState(0);
   const [stepError, setStepError] = useState("");
+  const [coverageList, setCoverageList] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -161,15 +163,18 @@ export default function ApplyForm() {
         {/* ---- STEP 2: Where you operate ---- */}
         <div className={step === 1 ? "space-y-4" : "hidden"}>
           <Field label="Residential address" name="address" value={v.address} onChange={set("address")} placeholder="House number, street, area" />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <SelectField label="State" name="state" value={v.state} onChange={set("state")}>
-              <option value="">Select state</option>
-              {NG_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </SelectField>
-            <Field label="LGA" name="lga" value={v.lga} onChange={set("lga")} placeholder="Local Govt Area" />
-            <Field label="City/Town" name="city" value={v.city} onChange={set("city")} placeholder="e.g. Ikeja" />
-          </div>
-          <Field label="Areas you can cover" name="coverage_areas" value={v.coverage_areas} onChange={set("coverage_areas")} placeholder="e.g. Ikeja, Yaba, Surulere — or 'anywhere in Lagos'" />
+          <StateLgaSelect
+            state={v.state} lga={v.lga}
+            onStateChange={(val) => setV((p) => ({ ...p, state: val }))}
+            onLgaChange={(val) => setV((p) => ({ ...p, lga: val }))}
+            required
+          />
+          <Field label="City/Town" name="city" value={v.city} onChange={set("city")} placeholder="e.g. Ikeja" />
+          <LgaMultiSelect
+            value={coverageList}
+            onChange={(list) => { setCoverageList(list); setV((p) => ({ ...p, coverage_areas: JSON.stringify(list) })); }}
+            label="Areas you can cover (select all)"
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Current occupation" name="occupation" value={v.occupation} onChange={set("occupation")} placeholder="e.g. Dispatch rider, Estate agent" />
             <SelectField label="Availability" name="availability" value={v.availability} onChange={set("availability")}>
