@@ -7,8 +7,9 @@ import { formatNGN } from "@/components/money";
 import { startTask, submitProof } from "@/lib/buddy/task-actions";
 import { ProofMedia } from "@/components/ProofMedia";
 import { RequestMessages } from "@/components/RequestMessages";
+import MilestoneChecklist from "./MilestoneChecklist";
 
-export default function TaskDetail({ task }: { task: any }) {
+export default function TaskDetail({ task, milestones = [] }: { task: any; milestones?: any[] }) {
   const [error, setError] = useState("");
   const [pending, start] = useTransition();
   const [state, formAction] = useFormState(submitProof, { error: "" });
@@ -224,6 +225,11 @@ export default function TaskDetail({ task }: { task: any }) {
         <div className="mb-4 rounded-3xl border border-bbb-border bg-bbb-soft p-5 shadow-soft">
           <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-dark">Client&apos;s checklist — cover every item in your proof</p>
           <p className="mt-2 whitespace-pre-line text-sm leading-6 text-bbb-charcoal">{task.expectations}</p>
+        </div>
+      )}
+      {["assigned", "in_progress"].includes(task.status) && milestones.length > 0 && (
+        <div className="mb-4">
+          <MilestoneChecklist requestId={task.id} milestones={milestones} />
         </div>
       )}
       <div className="mb-4 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">

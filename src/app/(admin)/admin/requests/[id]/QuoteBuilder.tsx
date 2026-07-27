@@ -8,6 +8,7 @@ import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { sendQuote } from "@/lib/admin/quote-actions";
 import { acceptCounterOffer } from "@/lib/admin/quote-actions";
+import { resendQuote } from "@/lib/admin/quote-actions";
 import { aiSuggestQuoteItems } from "@/lib/ai/assist-actions";
 
 interface Item { label: string; amount_ngn: number }
@@ -22,6 +23,7 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
   const [items, setItems] = useState<Item[]>(existing.length ? existing : defaults);
   const [payout, setPayout] = useState<number>(Number(request.buddy_payout_ngn ?? 0));
   const [error, setError] = useState("");
+  const [resent, setResent] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const total = useMemo(() => items.reduce((s, i) => s + Number(i.amount_ngn || 0), 0), [items]);
@@ -141,6 +143,14 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
           <button disabled={pending || !quotable} onClick={submit} className="h-12 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">
             {quotable ? (pending ? "Sending..." : "Send quote to client") : `Already ${request.status}`}
           </button>
+          {["quoted", "awaiting_pay"].includes(request.status) && Number(request.client_price_ngn) > 0 && (
+            <button
+              disabled={pending}
+              onClick={() => startTransition(async () => { setError(""); const r = await resendQuote(request.id); if (r?.error) setError(r.error); else setResent(true); })}
+              className="mt-2 h-11 w-full rounded-xl border border-bbb-border text-sm font-bold text-bbb-charcoal hover:border-bbb-strong disabled:opacity-50">
+              {pending ? "Sending…" : resent ? "Quote re-sent ✓ — send again" : "Resend quote with branded PDF"}
+            </button>
+          )}
         </aside>
       </div>
     </AdminShell>

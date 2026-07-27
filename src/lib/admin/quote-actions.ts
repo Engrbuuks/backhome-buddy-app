@@ -68,7 +68,17 @@ export async function sendQuote(input: {
   });
 
   const { data: reqOwner } = await db.from("requests").select("client_id, title").eq("id", req.id).single();
-  if (reqOwner) await notify(reqOwner.client_id, "Your quote is ready", `We priced "${reqOwner.title}" — review and proceed to payment.`, `/client/requests/${req.id}`, "quote_ready");
+  // Send the branded PDF quote (with link kept). Falls back to a plain
+  // notification if the PDF/email step fails, so quoting never breaks.
+  try {
+    const { emailBrandedQuote } = await import("@/lib/admin/quote-email");
+    const r = await emailBrandedQuote(req.id);
+    if (r.error && reqOwner) {
+      await notify(reqOwner.client_id, "Your quote is ready", `We priced "${reqOwner.title}" — review and proceed to payment.`, `/client/requests/${req.id}`, "quote_ready");
+    }
+  } catch {
+    if (reqOwner) await notify(reqOwner.client_id, "Your quote is ready", `We priced "${reqOwner.title}" — review and proceed to payment.`, `/client/requests/${req.id}`, "quote_ready");
+  }
   revalidatePath(`/admin/requests/${req.id}`);
   revalidatePath("/admin/requests");
   redirect("/admin/requests");
@@ -118,6 +128,28 @@ export async function acceptCounterOffer(requestId: string) {
   });
   await db.from("audit_log").insert({ actor_id: profile.id, action: "accept_counter_offer", target_id: requestId, detail: { newPrice } });
   await notify(req.client_id, "Your offer was accepted ✓", `We've accepted your price for "${req.title}". Review and proceed to payment.`, `/client/requests/${requestId}`, "quote_ready");
+  revalidatePath(`/admin/requests/${requestId}`);
+  return { error: "" };
+}
+
+/** Re-send the branded PDF quote for a request that has already been quoted.
+ *  Lets you attach the branded invoice to quotes that were sent before this
+ *  feature, or simply send it again on request. */
+export async function resendQuote(requestId: string): Promise<{ error: string }> {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") return { error: "Not authorized." };
+  const db = createAdminClient();
+  const { data: req } = await db.from("requests").select("id, status, client_price_ngn").eq("id", requestId).maybeSingle();
+  if (!req) return { error: "Request not found." };
+  // Only meaningful once a quote exists (priced) — any post-quote status is fine.
+  if (!["quoted", "awaiting_pay"].includes(req.status) || !(Number(req.client_price_ngn) > 0)) {
+    return { error: "There's no active quote to resend for this request." };
+  }
+  const { emailBrandedQuote } = await import("@/lib/admin/quote-email");
+  const r = await emailBrandedQuote(requestId);
+  if (r.error) return { error: r.error };
+  await db.from("audit_log").insert({ actor_id: profile.id, action: "resend_quote", target_id: requestId });
+  await db.from("request_timeline").insert({ request_id: requestId, from_status: req.status, to_status: req.status, actor_id: profile.id, note: "Branded quote re-sent to client" });
   revalidatePath(`/admin/requests/${requestId}`);
   return { error: "" };
 }

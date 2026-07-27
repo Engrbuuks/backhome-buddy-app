@@ -11,6 +11,8 @@ import { RequestMessages } from "@/components/RequestMessages";
 import { DeleteTaskPanel } from "./DeleteTaskPanel";
 import { listCharges } from "@/lib/admin/charge-actions";
 import { getUrgentSurchargePct } from "@/lib/admin/config-actions";
+import { getRequestMilestones } from "@/lib/requests/milestone-actions";
+import AdminMilestones from "./AdminMilestones";
 
 export default async function AdminRequestPage({ params }: { params: { id: string } }) {
   const request = await getRequestForAdmin(params.id);
@@ -19,12 +21,13 @@ export default async function AdminRequestPage({ params }: { params: { id: strin
   const buddies = request.status === "paid" ? await listApprovedBuddies() : [];
   const charges = await listCharges(params.id);
   const urgentPct = await getUrgentSurchargePct();
+  const milestones = await getRequestMilestones(params.id);
   return (
     <QuoteBuilder
       request={request}
       expectations={request.expectations}
       urgentSurchargePct={urgentPct}
-      actionSlot={<><MarkNotificationsRead link={`/admin/requests/${request.id}`} /><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
+      actionSlot={<><MarkNotificationsRead link={`/admin/requests/${request.id}`} /><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}{["assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"].includes(request.status) && <AdminMilestones requestId={request.id} initial={milestones} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
     />
   );
 }

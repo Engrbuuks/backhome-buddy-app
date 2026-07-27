@@ -59,6 +59,11 @@ export async function assignBuddy(requestId: string, buddyId: string) {
   if (!buddy || buddy.vetting !== "approved") return { error: "Buddy is not approved." };
   await db.from("requests").update({ assigned_buddy_id: buddyId }).eq("id", req.id);
   await transition(db, req, "assigned", p.id, "Buddy assigned");
+  // Copy the service type's milestone template onto this request (once).
+  try {
+    const { seedRequestMilestones } = await import("@/lib/requests/milestone-actions");
+    await seedRequestMilestones(req.id);
+  } catch { /* non-fatal */ }
   await db.from("audit_log").insert({ actor_id: p.id, action: "assign_buddy", target_id: req.id, detail: { buddyId } });
   const { data: r2 } = await db.from("requests").select("client_id, title").eq("id", req.id).single();
   await notify(buddyId, "New task assigned", `You have a new task: "${r2?.title ?? "task"}". Open it to start.`, `/buddy/tasks/${req.id}`, "task_assigned_buddy");
