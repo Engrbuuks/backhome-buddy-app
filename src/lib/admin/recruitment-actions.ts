@@ -129,6 +129,16 @@ export async function setRecruitStatus(id: string, status: "new" | "applied" | "
   if (status === "applied" || status === "qualified") patch.applied_at = new Date().toISOString();
   const { error } = await db.from("recruits").update(patch).eq("id", id);
   if (error) return { error: error.message };
+
+  // On rejection, email the applicant a warm note (encouraged to reapply).
+  if (status === "rejected") {
+    const { data: r } = await db.from("recruits").select("full_name, email").eq("id", id).maybeSingle();
+    if (r?.email) {
+      const { sendRejectionEmail } = await import("@/lib/admin/rejection-email");
+      await sendRejectionEmail(r.email, r.full_name, "recruit");
+    }
+  }
+
   revalidatePath("/admin/recruitment");
   return { error: "" };
 }

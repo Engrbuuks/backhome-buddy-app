@@ -81,6 +81,16 @@ export async function setBuddyVetting(buddyId: string, vetting: "approved" | "re
   const { error } = await db.from("buddy_profiles").update({ vetting }).eq("id", buddyId);
   if (error) return { error: error.message };
   await db.from("audit_log").insert({ actor_id: p.id, action: "set_buddy_vetting", target_id: buddyId, detail: { vetting } });
+
+  // On rejection, email the buddy a warm note (door left open to reapply).
+  if (vetting === "rejected") {
+    const { data: prof } = await db.from("profiles").select("full_name, email").eq("id", buddyId).maybeSingle();
+    if (prof?.email) {
+      const { sendRejectionEmail } = await import("@/lib/admin/rejection-email");
+      await sendRejectionEmail(prof.email, prof.full_name, "buddy");
+    }
+  }
+
   revalidatePath("/admin/buddies");
   return { error: "" };
 }
