@@ -71,6 +71,23 @@ export default async function AdminDashboard() {
         <MoneyCard icon={CreditCard} label="Payouts due" value={formatNGN(s.money.payoutDueNgn)} sub="To buddies for completed work" tone="amber" href="/admin/payouts" />
       </div>
 
+      {/* CLIENTS */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Link href="/admin/clients" className="rounded-2xl border border-bbb-border bg-white p-5 shadow-soft hover:border-bbb-strong">
+          <div className="mb-1 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-bbb-slate">Total clients</p><Users className="h-4 w-4 text-bbb-strong" /></div>
+          <p className="font-display text-3xl font-extrabold">{s.clients.total}</p>
+          <p className="mt-0.5 text-[11px] text-bbb-slate">Everyone signed up as a client</p>
+        </Link>
+        <Link href="/admin/clients" className="rounded-2xl border border-bbb-border bg-white p-5 shadow-soft hover:border-bbb-strong">
+          <div className="mb-1 flex items-center justify-between"><p className="text-xs font-bold uppercase tracking-wide text-bbb-slate">New clients this month</p><UserPlus className="h-4 w-4 text-green-600" /></div>
+          <p className="font-display text-3xl font-extrabold">{s.clients.thisMonth}</p>
+          <p className="mt-0.5 text-[11px] text-bbb-slate">Signed up since the 1st</p>
+        </Link>
+        <Link href="/admin/clients" className="flex items-center justify-center rounded-2xl border border-dashed border-bbb-border bg-white p-5 text-sm font-bold text-bbb-strong shadow-soft hover:border-bbb-strong">
+          View all clients <ArrowRight className="ml-1 h-4 w-4" />
+        </Link>
+      </div>
+
       {/* KPIs */}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((k) => {

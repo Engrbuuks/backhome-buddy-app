@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listClients, getClientTotals } from "@/lib/admin/clients-actions";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { Pager } from "@/components/Pager";
@@ -23,6 +24,11 @@ export default async function ClientsPage({ searchParams }: { searchParams?: { p
     <AdminShell title="Clients">
       <MarkNotificationsRead link="/admin/clients" />
       <PageHeader eyebrow="People" title="Clients" description="Everyone who has signed up as a client, and what they've requested." />
+      <div className="mb-4">
+        <Link href="/admin/clients/stalled" className="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-800 hover:border-amber-400">
+          Re-engage stalled clients →
+        </Link>
+      </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:max-w-md">
         <div className="rounded-2xl border border-bbb-border bg-white p-5 shadow-soft">
@@ -51,15 +57,17 @@ export default async function ClientsPage({ searchParams }: { searchParams?: { p
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id} className="border-b border-bbb-border last:border-0 hover:bg-bbb-bg/50">
+                <tr key={c.id} className="cursor-pointer border-b border-bbb-border last:border-0 hover:bg-bbb-bg/50">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-bbb-charcoal">{c.full_name || "—"}</p>
-                    <p className="text-xs text-bbb-slate">{c.email || "—"}{c.phone ? ` · ${c.phone}` : ""}</p>
+                    <Link href={`/admin/clients/${c.id}`} className="block">
+                      <p className="font-semibold text-bbb-strong hover:underline">{c.full_name || "—"}</p>
+                      <p className="text-xs text-bbb-slate">{c.email || "—"}{c.phone ? ` · ${c.phone}` : ""}</p>
+                    </Link>
                   </td>
-                  <td className="px-4 py-3 text-bbb-slate">{formatDate(c.created_at)}</td>
-                  <td className="px-4 py-3 text-center font-bold">{c.requestCount}</td>
-                  <td className="px-4 py-3 text-right font-bold">{c.totalSpendNgn > 0 ? formatNGN(c.totalSpendNgn) : "—"}</td>
-                  <td className="px-4 py-3 text-bbb-slate">{c.lastRequestAt ? formatDate(c.lastRequestAt) : "No requests"}</td>
+                  <td className="px-4 py-3 text-bbb-slate"><Link href={`/admin/clients/${c.id}`} className="block">{formatDate(c.created_at)}</Link></td>
+                  <td className="px-4 py-3 text-center font-bold"><Link href={`/admin/clients/${c.id}`} className="block">{c.requestCount}</Link></td>
+                  <td className="px-4 py-3 text-right font-bold"><Link href={`/admin/clients/${c.id}`} className="block">{c.totalSpendNgn > 0 ? formatNGN(c.totalSpendNgn) : "—"}</Link></td>
+                  <td className="px-4 py-3 text-bbb-slate"><Link href={`/admin/clients/${c.id}`} className="block">{c.lastRequestAt ? formatDate(c.lastRequestAt) : "No requests"}</Link></td>
                 </tr>
               ))}
             </tbody>

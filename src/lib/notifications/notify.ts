@@ -76,6 +76,24 @@ async function sendEmail(to: string, subject: string, body: string, link?: strin
   }
 }
 
+/** Public email send that reports success/error (used by admin re-engagement). */
+export async function sendEmailPublic(to: string, subject: string, body: string, link?: string): Promise<{ error?: string }> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return { error: "Email is not configured (RESEND_API_KEY missing)." };
+  if (!to) return { error: "No recipient email." };
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(subject, body, link) }),
+    });
+    if (!res.ok) return { error: `Email send failed (${res.status}).` };
+    return {};
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Email send error." };
+  }
+}
+
 /** In-app notification + email for a single user. Optionally pass a `typeKey`
  *  to make it respect the admin notification settings (on/off, custom wording,
  *  recipient override). Without a typeKey it behaves as before (always sends). */

@@ -23,10 +23,19 @@ export async function getDashboardStats() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const sevenAgo = new Date(now.getTime() - 6 * 86400000);
 
+  // client counts
+  const countClients = async (sinceMonth = false) => {
+    let q = db.from("profiles").select("id", { count: "exact", head: true }).eq("role", "client");
+    if (sinceMonth) q = q.gte("created_at", monthStart);
+    const { count } = await q;
+    return count ?? 0;
+  };
+
   // Run independent queries in parallel.
   const [
     awaitingQuote, awaitingPay, inExecution, proofToReview, disputed, completedAll,
     buddiesApproved, buddiesReview, recruitsNew, recruitsApplied,
+    clientsTotal, clientsThisMonth,
     payoutQueueRows, monthRevenueRows, heldRows, recentReqRows, trendRows, openDisputeRows,
   ] = await Promise.all([
     countReq(["submitted"]),
@@ -39,6 +48,8 @@ export async function getDashboardStats() {
     countTable("buddy_profiles", "vetting", "under_review"),
     countTable("recruits", "status", "new").catch(() => 0),
     countTable("recruits", "status", "applied").catch(() => 0),
+    countClients(false),
+    countClients(true),
     // payout queue: completed awaiting payout
     db.from("requests").select("buddy_payout_ngn").eq("status", "completed").limit(500),
     // revenue this month (client price on paid+ this month)
@@ -68,6 +79,7 @@ export async function getDashboardStats() {
   return {
     kpis: { awaitingQuote, awaitingPay, inExecution, proofToReview, disputed, completedAll },
     supply: { buddiesApproved, buddiesReview, recruitsNew, recruitsApplied },
+    clients: { total: clientsTotal, thisMonth: clientsThisMonth },
     money: {
       heldNgn: sum(heldRows.data, "client_price_ngn"),
       monthRevenueNgn: sum(monthRevenueRows.data, "client_price_ngn"),
