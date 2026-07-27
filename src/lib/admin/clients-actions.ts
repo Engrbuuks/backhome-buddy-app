@@ -236,3 +236,45 @@ export async function sendReengagementEmail(clientId: string, subject: string, b
   await db.from("audit_log").insert({ actor_id: p.id, action: "reengagement_email_sent", detail: { client_id: clientId, subject } });
   return { error: "" };
 }
+
+/** Admin-triggered password reset for a specific client. Tries two paths:
+ *  1) ask Supabase to email the reset link (same as the self-service flow), and
+ *  2) generate a recovery link directly (service role) that the admin can copy
+ *     and send the client another way (WhatsApp, etc.) if email isn't arriving.
+ *  Returns the link so the admin always has a working fallback. */
+export async function adminResetClientPassword(clientId: string): Promise<{ error: string; emailed?: boolean; link?: string }> {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { error: "Not authorized." };
+  const db = createAdminClient();
+  const { data: c } = await db.from("profiles").select("email").eq("id", clientId).maybeSingle();
+  const email = (c as any)?.email as string | undefined;
+  if (!email) return { error: "This client has no email on file." };
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
+  let emailed = false;
+  let link: string | undefined;
+
+  // Path 1: trigger Supabase's own reset email (best-effort).
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const sb = createClient();
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: `${appUrl}/reset-password` });
+    if (!error) emailed = true;
+  } catch { /* fall through to link generation */ }
+
+  // Path 2: generate a recovery link directly, so the admin has a copyable
+  // fallback even if the email doesn't deliver.
+  try {
+    const { data, error } = await (db as any).auth.admin.generateLink({
+      type: "recovery",
+      email,
+      options: { redirectTo: `${appUrl}/reset-password` },
+    });
+    if (!error) link = data?.properties?.action_link || data?.action_link || undefined;
+  } catch { /* generateLink may be unavailable on some plans */ }
+
+  await db.from("audit_log").insert({ actor_id: p.id, action: "admin_password_reset", detail: { client_id: clientId, emailed, link_generated: Boolean(link) } });
+
+  if (!emailed && !link) return { error: "Could not send or generate a reset link. Check email configuration." };
+  return { error: "", emailed, link };
+}

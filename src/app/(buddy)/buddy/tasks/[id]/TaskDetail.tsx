@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { startTask, submitProof } from "@/lib/buddy/task-actions";
 import { ProofMedia } from "@/components/ProofMedia";
+import { RequestMessages } from "@/components/RequestMessages";
 
 export default function TaskDetail({ task }: { task: any }) {
   const [error, setError] = useState("");
@@ -324,6 +325,8 @@ export default function TaskDetail({ task }: { task: any }) {
           <p className="mt-3 text-xs text-bbb-slate">{task.status === "proof_ready" ? "Under review." : task.status === "proof_approved" ? "Approved — awaiting client confirmation." : "Confirmed by the client."}</p>
         </div>
       )}
+
+      <RequestMessages requestId={task.id} viewer="buddy" />
     </div>
   );
 }

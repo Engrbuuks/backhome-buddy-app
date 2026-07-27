@@ -38,7 +38,7 @@ export default function RequestDetails({ request, charges = [], currency = "USD"
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <section className="space-y-5">
-          <QuoteResponse request={request} />
+          <QuoteResponse request={request} currency={currency} rates={rates} />
           <ClientCharges charges={charges} />
           {request.report && (
             <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">

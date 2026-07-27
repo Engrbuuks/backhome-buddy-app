@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
 import { formatNGN } from "@/components/money";
 import { sendQuote } from "@/lib/admin/quote-actions";
+import { acceptCounterOffer } from "@/lib/admin/quote-actions";
 import { aiSuggestQuoteItems } from "@/lib/ai/assist-actions";
 
 interface Item { label: string; amount_ngn: number }
@@ -27,7 +28,8 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
   const defaultPct = Number(request.service_types?.default_buddy_payout_pct ?? 60);
   const suggested = Math.round(total * defaultPct / 100);
   const margin = total - (payout || 0);
-  const quotable = request.status === "submitted" || request.status === "draft";
+  const negotiating = request.status === "quoted" && (request.quote_decision === "countered" || request.quote_decision === "changes_requested");
+  const quotable = request.status === "submitted" || request.status === "draft" || negotiating;
 
   function update(i: number, patch: Partial<Item>) {
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
@@ -58,6 +60,30 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
         <StatusPill status={request.status} />
         {request.urgency === "urgent" && <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">Urgent — quote within 6h</span>}
       </div>
+
+      {request.quote_decision === "countered" && request.counter_amount_ngn && (
+        <div className="mb-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="font-display text-base font-extrabold text-amber-900">💬 Client counter-offer</p>
+          <p className="mt-1 text-sm text-amber-800">
+            The client proposed <span className="font-extrabold">{formatNGN(Number(request.counter_amount_ngn))}</span> vs your quote of {formatNGN(Number(request.client_price_ngn ?? 0))}.
+            {request.quote_decision_note ? <> They said: &quot;{request.quote_decision_note}&quot;</> : null}
+          </p>
+          <p className="mt-1 text-xs text-amber-700">Round {Number(request.negotiation_rounds || 0)} of 3. Accept their price, or edit the items below and send a revised quote.</p>
+          <button
+            disabled={pending}
+            onClick={() => startTransition(async () => { setError(""); const r = await acceptCounterOffer(request.id); if (r?.error) setError(r.error); })}
+            className="mt-3 h-11 rounded-xl bg-amber-600 px-5 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50">
+            {pending ? "…" : `Accept client's price (${formatNGN(Number(request.counter_amount_ngn))})`}
+          </button>
+        </div>
+      )}
+
+      {request.quote_decision === "changes_requested" && (
+        <div className="mb-4 rounded-2xl border-2 border-bbb-strong/30 bg-bbb-soft p-4">
+          <p className="font-display text-base font-extrabold">Client requested changes</p>
+          <p className="mt-1 text-sm text-bbb-slate">&quot;{request.quote_decision_note}&quot; — adjust the items below and send a revised quote.</p>
+        </div>
+      )}
       {actionSlot}
       {expectations && (
         <div className="mb-4 rounded-2xl border border-bbb-border bg-bbb-soft p-4 shadow-soft">

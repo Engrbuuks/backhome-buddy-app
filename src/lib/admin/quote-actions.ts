@@ -53,6 +53,7 @@ export async function sendQuote(input: {
     status: "quoted",
       quote_decision: null,
       quote_decision_note: null,
+      counter_amount_ngn: null,
     updated_at: new Date().toISOString(),
   }).eq("id", req.id);
   if (upErr) return { error: upErr.message };
@@ -73,8 +74,7 @@ export async function sendQuote(input: {
   redirect("/admin/requests");
 }
 
-export async function getRequestForAdmin(id: string) {
-  const profile = await getCurrentProfile();
+export async function getRequestForAdmin(id: string) {  const profile = await getCurrentProfile();
   if (!profile || profile.role !== "admin") return null;
   const db = createAdminClient();
   const { data } = await db
@@ -83,4 +83,41 @@ export async function getRequestForAdmin(id: string) {
     .eq("id", id)
     .single();
   return data;
+}
+
+/** Admin accepts the client's counter-offer: the proposed price becomes the new
+ *  client price, keeping the buddy payout unchanged (margin absorbs the drop).
+ *  Re-issues the quote at the agreed price for the client to accept & pay. */
+export async function acceptCounterOffer(requestId: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") return { error: "Not authorized." };
+  const db = createAdminClient();
+  const { data: req } = await db.from("requests")
+    .select("id, status, title, client_id, counter_amount_ngn, buddy_payout_ngn")
+    .eq("id", requestId).maybeSingle();
+  if (!req) return { error: "Request not found." };
+  if (req.status !== "quoted") return { error: "Only an active quote can be settled." };
+  const newPrice = Number(req.counter_amount_ngn);
+  if (!(newPrice > 0)) return { error: "There is no counter-offer to accept." };
+  if (Number(req.buddy_payout_ngn) >= newPrice) {
+    return { error: "Can't accept — the client's price is at or below the buddy payout (margin would be negative). Re-quote instead." };
+  }
+
+  const { error } = await db.from("requests").update({
+    client_price_ngn: newPrice,
+    quote_decision: null,
+    quote_decision_note: null,
+    counter_amount_ngn: null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", requestId);
+  if (error) return { error: error.message };
+
+  await db.from("request_timeline").insert({
+    request_id: requestId, from_status: "quoted", to_status: "quoted",
+    actor_id: profile.id, note: `Admin accepted client's counter-offer — price set to ₦${newPrice.toLocaleString()}`,
+  });
+  await db.from("audit_log").insert({ actor_id: profile.id, action: "accept_counter_offer", target_id: requestId, detail: { newPrice } });
+  await notify(req.client_id, "Your offer was accepted ✓", `We've accepted your price for "${req.title}". Review and proceed to payment.`, `/client/requests/${requestId}`, "quote_ready");
+  revalidatePath(`/admin/requests/${requestId}`);
+  return { error: "" };
 }

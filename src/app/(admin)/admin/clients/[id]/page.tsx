@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Mail, Phone, Calendar, ArrowLeft } from "lucide-react";
 import ReengagementComposer from "./ReengagementComposer";
 import ClientCurrencyPicker from "./ClientCurrencyPicker";
+import ResetPasswordButton from "./ResetPasswordButton";
 import { getClientDisplay } from "@/lib/money/fx";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,10 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
             <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Display currency</p>
             <ClientCurrencyPicker clientId={c.id} current={currency} />
             <p className="mt-1.5 text-[11px] text-bbb-slate">Sets what this client sees by default. They can toggle it themselves too.</p>
+          </div>
+          <div className="mt-4 border-t border-bbb-border pt-3">
+            <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Account</p>
+            <ResetPasswordButton clientId={c.id} hasEmail={Boolean(c.email)} />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 lg:col-span-2">

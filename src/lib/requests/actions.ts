@@ -114,9 +114,12 @@ export async function getRequestById(id: string) {
   return data;
 }
 
-/** Client responds to a quote: accept, or request changes with a note.
- *  Acceptance doesn't move the state machine (payment recording does) —
- *  it signals the admin to send payment instructions. */
+/** Client responds to a quote: accept, request changes (note), or counter with a
+ *  specific price. Counter-offers are capped to a few rounds to avoid endless
+ *  haggling. Acceptance doesn't move the state machine (payment recording does).
+ */
+const MAX_NEGOTIATION_ROUNDS = 3;
+
 export async function respondToQuote(_prev: unknown, formData: FormData) {
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { notifyAdmins } = await import("@/lib/notifications/notify");
@@ -125,23 +128,60 @@ export async function respondToQuote(_prev: unknown, formData: FormData) {
   const requestId = String(formData.get("request_id") || "");
   const decision = String(formData.get("decision") || "");
   const note = String(formData.get("note") || "").slice(0, 1000).trim();
-  if (!["accepted", "changes_requested"].includes(decision)) return { error: "Invalid response." };
+  if (!["accepted", "changes_requested", "countered"].includes(decision)) return { error: "Invalid response." };
   if (decision === "changes_requested" && !note) return { error: "Tell us what you'd like changed." };
 
   const db = createAdminClient();
-  const { data: req } = await db.from("requests").select("id, client_id, title, status").eq("id", requestId).maybeSingle();
+  const { data: req } = await db.from("requests").select("id, client_id, title, status, client_price_ngn, negotiation_rounds").eq("id", requestId).maybeSingle();
   if (!req || req.client_id !== profile.id) return { error: "Request not found." };
   if (req.status !== "quoted") return { error: "This quote can no longer be responded to." };
 
-  const { error } = await db.from("requests").update({ quote_decision: decision, quote_decision_note: note || null }).eq("id", requestId);
+  // Handle a counter-offer: client proposes a specific price in their currency.
+  let counterAmountNgn: number | null = null;
+  if (decision === "countered") {
+    const rounds = Number(req.negotiation_rounds || 0);
+    if (rounds >= MAX_NEGOTIATION_ROUNDS) {
+      return { error: `You've reached the maximum of ${MAX_NEGOTIATION_ROUNDS} counter-offers. Please accept the current quote or contact us to discuss.` };
+    }
+    const offerAmount = Number(formData.get("offer_amount"));
+    const offerCurrency = String(formData.get("offer_currency") || "USD");
+    if (!(offerAmount > 0)) return { error: "Enter a valid amount for your offer." };
+    // Convert the client's offer (in their display currency) into NGN.
+    const { getRates } = await import("@/lib/money/fx");
+    const { isCurrency } = await import("@/lib/money/currency");
+    const rates = await getRates();
+    const cur = isCurrency(offerCurrency) ? offerCurrency : "USD";
+    counterAmountNgn = cur === "NGN" ? offerAmount : Math.round(offerAmount * (rates[cur] || 0));
+    if (!(counterAmountNgn > 0)) return { error: "Could not price your offer — please try again." };
+    if (req.client_price_ngn && counterAmountNgn >= Number(req.client_price_ngn)) {
+      return { error: "Your counter-offer should be lower than the current quote. To accept the quote, use Accept instead." };
+    }
+  }
+
+  const patch: any = { quote_decision: decision, quote_decision_note: note || null };
+  if (decision === "countered") {
+    patch.counter_amount_ngn = counterAmountNgn;
+    patch.negotiation_rounds = Number(req.negotiation_rounds || 0) + 1;
+  }
+  const { error } = await db.from("requests").update(patch).eq("id", requestId);
   if (error) return { error: error.message };
-  await db.from("audit_log").insert({ actor_id: profile.id, action: `quote_${decision}`, target_id: requestId, detail: { note } });
-  await db.from("request_timeline").insert({ request_id: requestId, from_status: "quoted", to_status: "quoted", actor_id: profile.id, note: decision === "accepted" ? "Client accepted the quote" : `Client requested changes: ${note}` });
-  await notifyAdmins(
-    decision === "accepted" ? "Quote accepted ✓" : "Quote changes requested",
-    `"${req.title}": ${decision === "accepted" ? "client accepted — send payment instructions." : note}`,
-    `/admin/requests/${requestId}`
-  );
+
+  await db.from("audit_log").insert({ actor_id: profile.id, action: `quote_${decision}`, target_id: requestId, detail: { note, counter_amount_ngn: counterAmountNgn } });
+
+  const timelineNote = decision === "accepted"
+    ? "Client accepted the quote"
+    : decision === "countered"
+    ? `Client counter-offered ₦${counterAmountNgn?.toLocaleString()}${note ? ` — ${note}` : ""}`
+    : `Client requested changes: ${note}`;
+  await db.from("request_timeline").insert({ request_id: requestId, from_status: "quoted", to_status: "quoted", actor_id: profile.id, note: timelineNote });
+
+  const adminTitle = decision === "accepted" ? "Quote accepted ✓" : decision === "countered" ? "Client counter-offer 💬" : "Quote changes requested";
+  const adminBody = decision === "accepted"
+    ? `"${req.title}": client accepted — send payment instructions.`
+    : decision === "countered"
+    ? `"${req.title}": client offered ₦${counterAmountNgn?.toLocaleString()}${note ? ` — ${note}` : ""}. Re-quote or accept their price.`
+    : `"${req.title}": ${note}`;
+  await notifyAdmins(adminTitle, adminBody, `/admin/requests/${requestId}`);
   revalidatePath(`/client/requests/${requestId}`);
   return { error: "", done: true };
 }

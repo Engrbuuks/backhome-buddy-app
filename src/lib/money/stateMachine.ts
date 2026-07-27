@@ -9,7 +9,7 @@ import type { RequestStatus } from "@/types/db";
 export const ALLOWED_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
   draft: ["submitted", "cancelled"],
   submitted: ["quoted", "cancelled"],
-  quoted: ["awaiting_pay", "cancelled"],
+  quoted: ["awaiting_pay", "quoted", "cancelled"], // re-quote allowed during negotiation
   awaiting_pay: ["paid", "quoted"], // back to quoted if payment fails
   paid: ["assigned", "cancelled", "refunded", "disputed"],
   assigned: ["in_progress", "cancelled", "disputed"],
