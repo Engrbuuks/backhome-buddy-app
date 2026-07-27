@@ -21,6 +21,7 @@ const NAV = [
   { href: "/admin/refunds", label: "Refunds & Cancellations", icon: RotateCcw },
   { href: "/admin/disputes", label: "Disputes", icon: AlertTriangle },
   { href: "/admin/buddies", label: "Buddy Management", icon: Users },
+  { href: "/admin/clients", label: "Clients", icon: UserCog },
   { href: "/admin/recruitment", label: "Recruitment", icon: UserPlus },
   { href: "/admin/services", label: "Service Pricing", icon: Package },
   { href: "/admin/regions", label: "Regions", icon: MapPin },

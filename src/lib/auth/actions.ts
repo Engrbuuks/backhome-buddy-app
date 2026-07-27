@@ -55,6 +55,27 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   });
   if (error) return { error: error.message };
 
+  // Record the signup and alert admins — mirrors buddy applications.
+  if (data.user) {
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      const { notifyAdmins } = await import("@/lib/notifications/notify");
+      const adb = createAdminClient();
+      await adb.from("audit_log").insert({
+        actor_id: data.user.id,
+        action: "client_signup",
+        detail: { email, full_name: fullName },
+      });
+      await notifyAdmins(
+        "New client signup",
+        `${fullName || email} created a client account.`,
+        "/admin/clients"
+      );
+    } catch {
+      // Never let a notification failure block the signup itself.
+    }
+  }
+
   // If email confirmation is ON (Supabase default), signUp returns a user but NO
   // active session — the user must confirm via email first. Redirecting to the
   // dashboard here would bounce them straight back out ("submission leads
