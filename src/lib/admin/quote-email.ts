@@ -41,11 +41,12 @@ export async function emailBrandedQuote(requestId: string): Promise<{ error: str
     return { error: `Could not build the quote PDF: ${e instanceof Error ? e.message : "unknown error"}` };
   }
   const base64 = Buffer.from(pdfBytes).toString("base64");
-
-  // In-app notification (with link) always.
-  await notify((req as any).client_id, "Your quote is ready", `We priced "${(req as any).title}" — your branded quote is attached, and you can review and pay online.`, link, "quote_ready");
+  if (!base64 || base64.length < 100) {
+    return { error: "The generated PDF was empty — not sending a broken attachment." };
+  }
 
   // Email with the branded PDF attached, link kept in the body.
+  let emailedWithPdf = false;
   if (clientEmail) {
     const body = `Hi ${clientName?.split(" ")[0] || "there"},\n\nYour quote for "${(req as any).title}" is ready. We've attached it as a PDF for your records.\n\nYou can review the full details and proceed to payment using the button below.`;
     const r = await sendEmailWithAttachments(
@@ -53,6 +54,17 @@ export async function emailBrandedQuote(requestId: string): Promise<{ error: str
       [{ filename: `${quoteNumber}.pdf`, content: base64 }], link
     );
     if (r?.error) return { error: r.error };
+    emailedWithPdf = true;
   }
+
+  // In-app notification (with link). Only mention the PDF if it actually went out.
+  await notify(
+    (req as any).client_id,
+    "Your quote is ready",
+    emailedWithPdf
+      ? `We priced "${(req as any).title}" — your branded quote PDF is in your email, and you can review and pay online.`
+      : `We priced "${(req as any).title}" — review and proceed to payment.`,
+    link, "quote_ready"
+  );
   return { error: "" };
 }

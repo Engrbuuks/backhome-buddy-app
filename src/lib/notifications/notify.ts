@@ -95,7 +95,9 @@ export async function sendEmailPublic(to: string, subject: string, body: string,
 }
 
 /** Send an email with one or more attachments (used for the branded quote PDF).
- *  Attachments are { filename, content } where content is base64 (no data URI). */
+ *  Attachments are { filename, content } where content is base64 (no data URI).
+ *  Reads Resend's response body so attachment/content problems surface instead
+ *  of silently succeeding. */
 export async function sendEmailWithAttachments(
   to: string, subject: string, body: string,
   attachments: Array<{ filename: string; content: string }>, link?: string
@@ -103,13 +105,42 @@ export async function sendEmailWithAttachments(
   const key = process.env.RESEND_API_KEY;
   if (!key) return { error: "Email is not configured (RESEND_API_KEY missing)." };
   if (!to) return { error: "No recipient email." };
+
+  // Guard: never claim an attachment when the content is empty/invalid.
+  const clean = (attachments || []).filter((a) => a && a.filename && a.content && a.content.length > 0);
+  if (attachments.length && !clean.length) {
+    return { error: "Attachment content was empty — nothing was attached." };
+  }
+
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-      body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(subject, body, link), attachments }),
+      body: JSON.stringify({
+        from: FROM,
+        to: [to],
+        subject,
+        html: emailHtml(subject, body, link),
+        attachments: clean.map((a) => ({
+          filename: a.filename,
+          content: a.content,           // base64 string
+          content_type: "application/pdf",
+        })),
+      }),
     });
-    if (!res.ok) return { error: `Email send failed (${res.status}).` };
+    const text = await res.text().catch(() => "");
+    if (!res.ok) {
+      console.error("Resend attachment send failed:", res.status, text);
+      return { error: `Email send failed (${res.status}): ${text.slice(0, 200)}` };
+    }
+    // Success bodies include an id; a body-level error means it didn't really send.
+    try {
+      const j = text ? JSON.parse(text) : {};
+      if (j?.error) {
+        console.error("Resend body error:", j.error);
+        return { error: typeof j.error === "string" ? j.error : (j.error?.message || "Resend rejected the message.") };
+      }
+    } catch { /* non-JSON success body is fine */ }
     return {};
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Email send error." };
