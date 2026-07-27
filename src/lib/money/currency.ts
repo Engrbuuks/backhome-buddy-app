@@ -34,3 +34,17 @@ export function formatMoneyIn(ngn: number, currency: Currency, rates: RateMap): 
     maximumFractionDigits: currency === "NGN" ? 0 : 2,
   }).format(value);
 }
+
+/** PDF-safe money: same value, but uses ASCII currency codes/symbols only, so
+ *  the standard PDF font (WinAnsi) can always render it. The Naira sign ₦ and
+ *  some symbols aren't WinAnsi-encodable, so we prefix the ISO code instead. */
+export function formatMoneyPdf(ngn: number, currency: Currency, rates: RateMap): string {
+  const rate = rates[currency] || (currency === "NGN" ? 1 : 0);
+  const effective = rate ? currency : "NGN";
+  const value = effective === "NGN" ? ngn : ngn / (rates[effective] || 1);
+  const digits = effective === "NGN" ? 0 : 2;
+  const num = new Intl.NumberFormat("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  // WinAnsi has $ £ € but NOT ₦; use ISO code for NGN (and as a safe default).
+  const prefix: Record<Currency, string> = { USD: "$", GBP: "GBP ", EUR: "EUR ", CAD: "CAD ", NGN: "NGN " };
+  return `${prefix[effective]}${num}`;
+}

@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import fs from "fs";
 import path from "path";
-import { formatMoneyIn, CURRENCY_META, type Currency, type RateMap } from "@/lib/money/currency";
+import { formatMoneyPdf, CURRENCY_META, type Currency, type RateMap } from "@/lib/money/currency";
 import type { BankDetail } from "@/lib/money/fx";
 
 const GREEN = rgb(0x07 / 255, 0x95 / 255, 0x16 / 255);
@@ -40,7 +40,29 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  const money = (ngn: number) => formatMoneyIn(ngn, input.currency, input.rates);
+  const money = (ngn: number) => formatMoneyPdf(ngn, input.currency, input.rates);
+
+  // Replace characters the standard PDF font (WinAnsi) cannot encode, so the
+  // build can never crash on an unexpected glyph (smart quotes, dashes, ₦, emoji,
+  // accents). Common typographic characters get sensible ASCII equivalents.
+  const REPLACEMENTS: Record<string, string> = {
+    "\u20a6": "NGN ", "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+    "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u2022": "-", "\u00a0": " ",
+    "\u2192": "->", "\u2713": "", "\u2705": "", "\ufe0f": "",
+  };
+  const safe = (s: string): string => {
+    if (!s) return "";
+    let out = "";
+    for (const ch of String(s)) {
+      const code = ch.codePointAt(0) || 0;
+      if (REPLACEMENTS[ch] !== undefined) { out += REPLACEMENTS[ch]; continue; }
+      // WinAnsi safe range: printable ASCII + Latin-1 supplement.
+      if (code <= 0xff) out += ch;
+      else out += ""; // drop anything else (emoji, other scripts) rather than crash
+    }
+    return out;
+  };
+  const draw = (text: string, opts: any): void => { page.drawText(safe(text), opts); };
 
   // ---------- Left decorative band ----------
   const bandW = 74;
@@ -68,40 +90,40 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
     const th = 30; const sc = th / png.height;
     page.drawImage(png, { x: CX, y: y - th + 6, width: png.width * sc, height: th });
   } catch {
-    page.drawText("Backhome Buddy", { x: CX, y: y - 16, size: 16, font: bold, color: DARK });
+    draw("Backhome Buddy", { x: CX, y: y - 16, size: 16, font: bold, color: DARK });
   }
   const titleTxt = "QUOTE";
-  page.drawText(titleTxt, { x: RX - bold.widthOfTextAtSize(titleTxt, 34), y: y - 24, size: 34, font: bold, color: CHARCOAL });
+  draw(titleTxt, { x: RX - bold.widthOfTextAtSize(titleTxt, 34), y: y - 24, size: 34, font: bold, color: CHARCOAL });
   // green underline under the title (like the sample's gold rule)
   page.drawRectangle({ x: CX, y: y - 40, width: RX - CX, height: 3, color: GREEN });
   y -= 66;
 
   // ---------- Meta: quote no + date (left), prepared for (right) ----------
-  page.drawText("QUOTE NUMBER", { x: CX, y, size: 7.5, font: bold, color: GREEN });
-  page.drawText(input.quoteNumber, { x: CX, y: y - 13, size: 11, font: bold, color: CHARCOAL });
-  page.drawText("QUOTE DATE", { x: CX, y: y - 34, size: 7.5, font: bold, color: GREEN });
-  page.drawText(input.date, { x: CX, y: y - 47, size: 11, font: bold, color: CHARCOAL });
+  draw("QUOTE NUMBER", { x: CX, y, size: 7.5, font: bold, color: GREEN });
+  draw(input.quoteNumber, { x: CX, y: y - 13, size: 11, font: bold, color: CHARCOAL });
+  draw("QUOTE DATE", { x: CX, y: y - 34, size: 7.5, font: bold, color: GREEN });
+  draw(input.date, { x: CX, y: y - 47, size: 11, font: bold, color: CHARCOAL });
 
   const metaR = RX - 190;
-  page.drawText("QUOTE TO:", { x: metaR, y, size: 7.5, font: bold, color: GREEN });
-  page.drawText(input.clientName || "Client", { x: metaR, y: y - 13, size: 11, font: bold, color: CHARCOAL });
-  if (input.clientEmail) page.drawText(input.clientEmail, { x: metaR, y: y - 28, size: 9, font, color: SLATE });
+  draw("QUOTE TO:", { x: metaR, y, size: 7.5, font: bold, color: GREEN });
+  draw(input.clientName || "Client", { x: metaR, y: y - 13, size: 11, font: bold, color: CHARCOAL });
+  if (input.clientEmail) draw(input.clientEmail, { x: metaR, y: y - 28, size: 9, font, color: SLATE });
   const rt = (input.requestTitle || "Custom request").slice(0, 40);
-  page.drawText(rt, { x: metaR, y: y - 42, size: 9, font, color: SLATE });
+  draw(rt, { x: metaR, y: y - 42, size: 9, font, color: SLATE });
   y -= 78;
 
   // ---------- Items table ----------
   const colDesc = CX + 12;
   const colAmt = RX - 12;
   page.drawRectangle({ x: CX, y: y - 7, width: RX - CX, height: 28, color: DARK });
-  page.drawText("DESCRIPTION", { x: colDesc, y, size: 9, font: bold, color: WHITE });
-  page.drawText("AMOUNT", { x: colAmt - bold.widthOfTextAtSize("AMOUNT", 9), y, size: 9, font: bold, color: WHITE });
+  draw("DESCRIPTION", { x: colDesc, y, size: 9, font: bold, color: WHITE });
+  draw("AMOUNT", { x: colAmt - bold.widthOfTextAtSize("AMOUNT", 9), y, size: 9, font: bold, color: WHITE });
   y -= 34;
 
   for (const it of input.items) {
-    page.drawText((it.label || "").slice(0, 52), { x: colDesc, y, size: 10, font, color: CHARCOAL });
+    draw((it.label || "").slice(0, 52), { x: colDesc, y, size: 10, font, color: CHARCOAL });
     const a = money(it.amountNgn);
-    page.drawText(a, { x: colAmt - font.widthOfTextAtSize(a, 10), y, size: 10, font, color: CHARCOAL });
+    draw(a, { x: colAmt - font.widthOfTextAtSize(a, 10), y, size: 10, font, color: CHARCOAL });
     y -= 11;
     page.drawLine({ start: { x: CX, y }, end: { x: RX, y }, thickness: 0.5, color: LIGHT });
     y -= 17;
@@ -111,7 +133,7 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   // ---------- Payment method (left) + Grand total chip (right) ----------
   const blockTop = y;
   // Payment details
-  page.drawText("Payment Method:", { x: CX, y, size: 11, font: bold, color: CHARCOAL });
+  draw("Payment Method:", { x: CX, y, size: 11, font: bold, color: CHARCOAL });
   let py = y - 18;
   if (input.bank && input.bank.account_number) {
     const b = input.bank;
@@ -121,12 +143,12 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
     if (b.account_number) rows.push(["Account number", b.account_number]);
     if (b.extra) rows.push(["Sort/SWIFT/Routing", b.extra]);
     for (const [k, v] of rows) {
-      page.drawText(k, { x: CX, y: py, size: 8.5, font, color: SLATE });
-      page.drawText(v, { x: CX + 96, y: py, size: 9.5, font: bold, color: CHARCOAL });
+      draw(k, { x: CX, y: py, size: 8.5, font, color: SLATE });
+      draw(v, { x: CX + 96, y: py, size: 9.5, font: bold, color: CHARCOAL });
       py -= 15;
     }
   } else {
-    page.drawText("Bank transfer — details provided by our team.", { x: CX, y: py, size: 9, font, color: SLATE });
+    draw("Bank transfer — details provided by our team.", { x: CX, y: py, size: 9, font, color: SLATE });
     py -= 15;
   }
 
@@ -136,36 +158,36 @@ export async function buildQuotePdf(input: QuotePdfInput): Promise<Uint8Array> {
   const totValX = RX - 14;
   let ty = blockTop + 4;
   const subtotal = money(input.totalNgn);
-  page.drawText("Sub Total", { x: totLabelX, y: ty, size: 10, font: bold, color: CHARCOAL });
-  page.drawText(subtotal, { x: totValX - bold.widthOfTextAtSize(subtotal, 10), y: ty, size: 10, font: bold, color: CHARCOAL });
+  draw("Sub Total", { x: totLabelX, y: ty, size: 10, font: bold, color: CHARCOAL });
+  draw(subtotal, { x: totValX - bold.widthOfTextAtSize(subtotal, 10), y: ty, size: 10, font: bold, color: CHARCOAL });
   ty -= 30;
   // grand total chip
   page.drawRectangle({ x: totX, y: ty - 12, width: 250, height: 40, color: GREEN });
-  page.drawText("Grand Total", { x: totLabelX, y: ty, size: 11, font: bold, color: WHITE });
+  draw("Grand Total", { x: totLabelX, y: ty, size: 11, font: bold, color: WHITE });
   const gt = money(input.totalNgn);
-  page.drawText(gt, { x: totValX - bold.widthOfTextAtSize(gt, 16), y: ty - 3, size: 16, font: bold, color: WHITE });
+  draw(gt, { x: totValX - bold.widthOfTextAtSize(gt, 16), y: ty - 3, size: 16, font: bold, color: WHITE });
 
   y = Math.min(py, ty - 30) - 24;
 
   // ---------- Terms & conditions ----------
-  page.drawText("Terms & Conditions", { x: CX, y, size: 11, font: bold, color: CHARCOAL });
+  draw("Terms & Conditions", { x: CX, y, size: 11, font: bold, color: CHARCOAL });
   y -= 16;
   const note = input.validityNote || "This quote is provisional and may be revised if the scope of work changes. Nothing is charged until you accept and pay. Work begins once payment is confirmed. Please use your request title as the transfer reference.";
-  for (const line of wrap(note, font, 9, RX - CX)) { page.drawText(line, { x: CX, y, size: 9, font, color: SLATE }); y -= 13; }
+  for (const line of wrap(safe(note), font, 9, RX - CX)) { draw(line, { x: CX, y, size: 9, font, color: SLATE }); y -= 13; }
   y -= 14;
 
   // ---------- Thanks + contact ----------
-  page.drawText("Thank you for your business", { x: CX, y, size: 11, font: bold, color: DARK });
+  draw("Thank you for your business", { x: CX, y, size: 11, font: bold, color: DARK });
   y -= 20;
   const contact: string[] = [];
   if (input.companyPhone) contact.push(`P : ${input.companyPhone}`);
   if (input.companyEmail) contact.push(`E : ${input.companyEmail}`);
   if (input.companyAddress) contact.push(`A : ${input.companyAddress}`);
-  for (const c of contact) { page.drawText(c, { x: CX, y, size: 8.5, font, color: SLATE }); y -= 13; }
+  for (const c of contact) { draw(c, { x: CX, y, size: 8.5, font, color: SLATE }); y -= 13; }
 
   // ---------- Footer strip ----------
   page.drawRectangle({ x: bandW, y: 0, width: width - bandW, height: 5, color: GREEN });
-  page.drawText("Backhome Buddy — Your Tasks Handled Right.", { x: CX, y: 18, size: 8, font: bold, color: DARK });
+  draw("Backhome Buddy — Your Tasks Handled Right.", { x: CX, y: 18, size: 8, font: bold, color: DARK });
 
   return doc.save();
 }
