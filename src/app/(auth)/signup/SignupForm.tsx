@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { useFormState } from "react-dom";
-import { Lock, Mail, User } from "lucide-react";
+import { Lock, Mail, User, Phone } from "lucide-react";
 import { AuthLayout } from "@/components/AuthLayout";
 import { Field } from "@/components/FormControls";
 import { ErrorState } from "@/components/StateBlocks";
@@ -28,6 +28,7 @@ export default function SignupForm() {
       <form action={formAction} className="max-w-md space-y-4">
         <Field label="Full name" icon={User} type="text" name="full_name" required placeholder="Your name" />
         <Field label="Email address" icon={Mail} type="email" name="email" required placeholder="you@example.com" />
+        <Field label="Phone number (WhatsApp preferred)" icon={Phone} type="tel" name="phone" required placeholder="+44 7… or +234 8…" />
         <Field label="Password" icon={Lock} type={show ? "text" : "password"} name="password" required placeholder="Create a password (min 8 characters)" minLength={8} />
         <button type="button" onClick={() => setShow(!show)} className="text-xs font-semibold text-bbb-slate hover:text-bbb-strong">
           {show ? "Hide" : "Show"} password

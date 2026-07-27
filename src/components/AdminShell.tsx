@@ -26,7 +26,7 @@ const NAV = [
   { href: "/admin/services", label: "Service Pricing", icon: Package },
   { href: "/admin/regions", label: "Regions", icon: MapPin },
   { href: "/admin/ledger", label: "Ledger", icon: Receipt },
-  { href: "/admin/fx", label: "FX Rate", icon: Receipt },
+  { href: "/admin/fx", label: "Currency & Banking", icon: Receipt },
   { href: "/admin/chats", label: "Support Chats", icon: MessageSquare },
   { href: "/admin/knowledge", label: "Knowledge Base", icon: BookOpen },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },

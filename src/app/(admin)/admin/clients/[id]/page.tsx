@@ -7,6 +7,8 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { Mail, Phone, Calendar, ArrowLeft } from "lucide-react";
 import ReengagementComposer from "./ReengagementComposer";
+import ClientCurrencyPicker from "./ClientCurrencyPicker";
+import { getClientDisplay } from "@/lib/money/fx";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   if (!me || me.role !== "admin") redirect("/login");
   const c = await getClientDetail(params.id);
   if (!c) notFound();
+  const { currency } = await getClientDisplay(params.id);
 
   return (
     <AdminShell title="Client">
@@ -28,6 +31,11 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <p className="flex items-center gap-2 text-sm"><Mail className="h-4 w-4 text-bbb-slate" /> {c.email || "—"}</p>
           <p className="mt-2 flex items-center gap-2 text-sm"><Phone className="h-4 w-4 text-bbb-slate" /> {c.phone || "—"}</p>
           <p className="mt-2 flex items-center gap-2 text-sm"><Calendar className="h-4 w-4 text-bbb-slate" /> Joined {formatDate(c.created_at)}</p>
+          <div className="mt-4 border-t border-bbb-border pt-3">
+            <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Display currency</p>
+            <ClientCurrencyPicker clientId={c.id} current={currency} />
+            <p className="mt-1.5 text-[11px] text-bbb-slate">Sets what this client sees by default. They can toggle it themselves too.</p>
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-3 lg:col-span-2">
           <Stat label="Requests" value={String(c.stats.total)} />

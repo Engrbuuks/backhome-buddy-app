@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { listMyRequests } from "@/lib/requests/actions";
 import { StatusPill } from "@/components/StatusPill";
-import { formatClientMoney, formatDate } from "@/components/money";
+import { formatDate, formatClientMoneyIn } from "@/components/money";
+import { getMyDisplay } from "@/lib/money/fx";
+import CurrencyToggle from "@/components/CurrencyToggle";
 
 export default async function ClientDashboard() {
   const requests = await listMyRequests();
+  const { currency, rates } = await getMyDisplay();
   return (
     <div>
       <div className="mb-6 flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
@@ -12,7 +15,10 @@ export default async function ClientDashboard() {
           <h1 className="font-display text-2xl font-extrabold">My Requests</h1>
           <p className="mt-1 text-sm text-bbb-slate">Track everything you&apos;ve asked us to handle.</p>
         </div>
-        <Link href="/client/requests/new" className="h-10 rounded-xl bg-bbb-strong px-4 text-sm font-bold leading-10 text-white hover:bg-bbb-dark">+ New Request</Link>
+        <div className="flex flex-col items-center gap-2 sm:flex-row">
+          <CurrencyToggle current={currency} />
+          <Link href="/client/requests/new" className="h-10 rounded-xl bg-bbb-strong px-4 text-sm font-bold leading-10 text-white hover:bg-bbb-dark">+ New Request</Link>
+        </div>
       </div>
 
       {requests.length === 0 ? (
@@ -32,7 +38,7 @@ export default async function ClientDashboard() {
                 </p>
               </div>
               <div className="flex items-center gap-4">
-                {r.client_price_ngn != null && <span className="text-sm font-bold">{formatClientMoney(r.client_price_ngn, r.fx_rate)}</span>}
+                {r.client_price_ngn != null && <span className="text-sm font-bold">{formatClientMoneyIn(r.client_price_ngn, currency, rates)}</span>}
                 <StatusPill status={r.status} />
               </div>
             </Link>

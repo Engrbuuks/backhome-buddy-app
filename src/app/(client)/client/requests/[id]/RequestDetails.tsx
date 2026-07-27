@@ -3,7 +3,7 @@ import React from "react";
 import { Camera, FileText, Video } from "lucide-react";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { RequestMessages } from "@/components/RequestMessages";
-import { formatClientMoney, formatDate } from "@/components/money";
+import { formatClientMoneyIn, formatDate } from "@/components/money";
 import { useState, useTransition } from "react";
 import { confirmCompletion } from "@/lib/requests/confirm-actions";
 import ClientCharges from "./ClientCharges";
@@ -16,7 +16,7 @@ import { ErrorState } from "@/components/StateBlocks";
 const LIFECYCLE = ["submitted", "quoted", "paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed"] as const;
 const PROOF_ICON = { photo: Camera, video: Video, report: FileText } as const;
 
-export default function RequestDetails({ request, charges = [] }: { request: any; charges?: any[] }) {
+export default function RequestDetails({ request, charges = [], currency = "USD", rates, bank }: { request: any; charges?: any[]; currency?: any; rates?: any; bank?: any }) {
   const [confirmError, setConfirmError] = useState("");
   const [confirming, startConfirm] = useTransition();
   const [cancelError, setCancelError] = useState("");
@@ -94,20 +94,36 @@ export default function RequestDetails({ request, charges = [] }: { request: any
                   {request.quote_items.map((q: any) => (
                     <div key={q.id} className="flex items-center justify-between text-sm">
                       <span className="text-bbb-slate">{q.label}</span>
-                      <span className="font-semibold">{formatClientMoney(Number(q.amount_ngn), request.fx_rate)}</span>
+                      <span className="font-semibold">{formatClientMoneyIn(Number(q.amount_ngn), currency, rates)}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t border-bbb-border pt-3">
                   <span className="text-sm font-bold">Total</span>
-                  <span className="font-display text-lg font-extrabold">{formatClientMoney(request.client_price_ngn ?? total, request.fx_rate)}</span>
+                  <span className="font-display text-lg font-extrabold">{formatClientMoneyIn(request.client_price_ngn ?? total, currency, rates)}</span>
                 </div>
               </>
             ) : (
               <p className="mt-3 text-sm text-bbb-slate">We&apos;re reviewing your request — your quote will appear here.</p>
             )}
             {request.status === "quoted" ? (
-              <p className="mt-4 rounded-xl bg-bbb-soft p-3 text-xs font-semibold text-bbb-dark">To pay: send the dollar amount via transfer as advised by our team — we&apos;ll confirm receipt here once it lands.</p>
+              <div className="mt-4 rounded-xl bg-bbb-soft p-4">
+                <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-dark">Payment details</p>
+                {bank ? (
+                  <div className="mt-2 space-y-1 text-sm">
+                    <p className="text-bbb-slate">Pay <span className="font-bold text-bbb-charcoal">{formatClientMoneyIn(request.client_price_ngn ?? total, currency, rates)}</span> by transfer to:</p>
+                    <div className="mt-2 rounded-lg border border-bbb-border bg-white p-3">
+                      {bank.bank_name && <p className="flex justify-between"><span className="text-bbb-slate">Bank</span><span className="font-semibold">{bank.bank_name}</span></p>}
+                      {bank.account_name && <p className="flex justify-between"><span className="text-bbb-slate">Account name</span><span className="font-semibold">{bank.account_name}</span></p>}
+                      {bank.account_number && <p className="flex justify-between"><span className="text-bbb-slate">Account number</span><span className="font-mono font-bold">{bank.account_number}</span></p>}
+                      {bank.extra && <p className="flex justify-between"><span className="text-bbb-slate">Sort/SWIFT/Routing</span><span className="font-semibold">{bank.extra}</span></p>}
+                    </div>
+                    <p className="mt-2 text-[11px] text-bbb-slate">Use your request title as the transfer reference. We&apos;ll confirm receipt here once it lands.</p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs font-semibold text-bbb-dark">To pay: send the amount via transfer as advised by our team — we&apos;ll confirm receipt here once it lands.</p>
+                )}
+              </div>
             ) : null}
             {request.status === "proof_approved" && (
               <div className="mt-4">

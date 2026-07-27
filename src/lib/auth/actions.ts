@@ -43,15 +43,17 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
   const fullName = String(formData.get("full_name") || "").slice(0, 120);
+  const phone = String(formData.get("phone") || "").slice(0, 32).trim();
   if (rateLimited(`signup:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email address." };
+  if (phone.replace(/\D/g, "").length < 10) return { error: "Enter a valid phone number (WhatsApp preferred)." };
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   const supabase = createClient();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
   const { data, error } = await supabase.auth.signUp({
     email, password,
-    options: { data: { full_name: fullName }, emailRedirectTo: `${appUrl}/login` },
+    options: { data: { full_name: fullName, phone }, emailRedirectTo: `${appUrl}/login` },
   });
   if (error) return { error: error.message };
 
@@ -61,14 +63,16 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
       const { createAdminClient } = await import("@/lib/supabase/admin");
       const { notifyAdmins } = await import("@/lib/notifications/notify");
       const adb = createAdminClient();
+      // Ensure phone lands on the profile (the trigger may only copy name/email).
+      await adb.from("profiles").update({ phone, full_name: fullName }).eq("id", data.user.id);
       await adb.from("audit_log").insert({
         actor_id: data.user.id,
         action: "client_signup",
-        detail: { email, full_name: fullName },
+        detail: { email, full_name: fullName, phone },
       });
       await notifyAdmins(
         "New client signup",
-        `${fullName || email} created a client account.`,
+        `${fullName || email} created a client account (${phone}).`,
         "/admin/clients"
       );
     } catch {

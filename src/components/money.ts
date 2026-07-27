@@ -14,7 +14,16 @@ export function formatUSD(ngn: number, rate: number): string {
   if (!rate) return "";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(ngn / rate);
 }
-/** Client-facing money: USD only, converted from internal NGN at the locked rate. */
+
+import { formatMoneyIn, type Currency, type RateMap } from "@/lib/money/currency";
+
+/** Client-facing money in a chosen currency, converted from internal NGN.
+ *  Pass the client's currency + the rate map. Falls back to NGN if unset. */
+export function formatClientMoneyIn(ngn: number, currency: Currency, rates: RateMap): string {
+  return formatMoneyIn(ngn, currency, rates);
+}
+
+/** Legacy USD-only formatter, kept so older callers don't break. */
 export function formatClientMoney(ngn: number, rate?: number | null): string {
   if (rate && Number(rate) > 0) return formatUSD(ngn, Number(rate));
   return formatNGN(ngn); // fallback if no rate ever set
