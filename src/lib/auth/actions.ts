@@ -44,16 +44,34 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   const password = String(formData.get("password") || "");
   const fullName = String(formData.get("full_name") || "").slice(0, 120);
   if (rateLimited(`signup:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
+  if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email address." };
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   const supabase = createClient();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email, password,
-    options: { data: { full_name: fullName }, emailRedirectTo: appUrl },
+    options: { data: { full_name: fullName }, emailRedirectTo: `${appUrl}/login` },
   });
   if (error) return { error: error.message };
-  redirect("/client/dashboard");
+
+  // If email confirmation is ON (Supabase default), signUp returns a user but NO
+  // active session — the user must confirm via email first. Redirecting to the
+  // dashboard here would bounce them straight back out ("submission leads
+  // nowhere"). So: only redirect when we actually have a session; otherwise show
+  // a clear "check your email" success message.
+  if (data.session) {
+    redirect("/client/dashboard");
+  }
+  // Detect the rare "already registered" case Supabase signals with an
+  // identities array of length 0.
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    return { error: "An account with this email already exists. Please sign in instead." };
+  }
+  return {
+    ok: true,
+    message: "We've sent a confirmation link to your email. Click it to activate your account, then sign in.",
+  };
 }
 
 export async function signOut() {
