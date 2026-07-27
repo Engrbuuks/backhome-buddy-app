@@ -105,6 +105,9 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
             <DocLink label={`ID${b.id_doc_type ? ` (${b.id_doc_type.replace(/_/g, " ")})` : ""}`} url={b.id_doc_url} />
             <DocLink label="Utility bill" url={b.utility_bill_url} />
             <DocLink label="PCC" url={b.pcc_url} />
+            <DocLink label="CV / résumé" url={b.cv_url} />
+            <DocLink label="Passport photo" url={b.passport_photo_url} />
+            <DocLink label="NIN slip" url={b.nin_slip_url} />
           </div>
           <p className="pt-1 text-[11px] text-bbb-slate">Links are private and expire after 1 hour.</p>
         </div>
