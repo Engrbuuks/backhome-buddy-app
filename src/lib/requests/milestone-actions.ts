@@ -10,9 +10,14 @@ async function admin() {
 
 // ---------- Service-type templates ----------
 export async function listServiceMilestones(serviceTypeId: string) {
-  const db = createAdminClient();
-  const { data } = await db.from("service_milestones").select("*").eq("service_type_id", serviceTypeId).order("sort_order");
-  return data ?? [];
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db.from("service_milestones").select("*").eq("service_type_id", serviceTypeId).order("sort_order");
+    if (error) return [];
+    return data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export async function saveServiceMilestones(serviceTypeId: string, milestones: Array<{ title: string; hint?: string }>) {
@@ -32,24 +37,34 @@ export async function saveServiceMilestones(serviceTypeId: string, milestones: A
 
 // ---------- Per-request milestones ----------
 export async function getRequestMilestones(requestId: string) {
-  const db = createAdminClient();
-  const { data } = await db.from("request_milestones").select("*").eq("request_id", requestId).order("sort_order");
-  return data ?? [];
+  try {
+    const db = createAdminClient();
+    const { data, error } = await db.from("request_milestones").select("*").eq("request_id", requestId).order("sort_order");
+    if (error) return []; // table may not exist yet (migration not run) — degrade quietly
+    return data ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** Copy a service type's template milestones onto a request (once). Called at
  *  assignment; no-op if the request already has milestones. */
 export async function seedRequestMilestones(requestId: string) {
-  const db = createAdminClient();
-  const { count } = await db.from("request_milestones").select("id", { count: "exact", head: true }).eq("request_id", requestId);
-  if ((count ?? 0) > 0) return { error: "" };
-  const { data: req } = await db.from("requests").select("service_type_id").eq("id", requestId).maybeSingle();
-  if (!(req as any)?.service_type_id) return { error: "" };
-  const { data: tmpl } = await db.from("service_milestones").select("title, hint, sort_order").eq("service_type_id", (req as any).service_type_id).order("sort_order");
-  if (!tmpl?.length) return { error: "" };
-  const rows = tmpl.map((t: any) => ({ request_id: requestId, title: t.title, hint: t.hint, sort_order: t.sort_order }));
-  await db.from("request_milestones").insert(rows);
-  return { error: "" };
+  try {
+    const db = createAdminClient();
+    const { count, error: cErr } = await db.from("request_milestones").select("id", { count: "exact", head: true }).eq("request_id", requestId);
+    if (cErr) return { error: "" }; // table missing (migration not run) — skip quietly
+    if ((count ?? 0) > 0) return { error: "" };
+    const { data: req } = await db.from("requests").select("service_type_id").eq("id", requestId).maybeSingle();
+    if (!(req as any)?.service_type_id) return { error: "" };
+    const { data: tmpl } = await db.from("service_milestones").select("title, hint, sort_order").eq("service_type_id", (req as any).service_type_id).order("sort_order");
+    if (!tmpl?.length) return { error: "" };
+    const rows = tmpl.map((t: any) => ({ request_id: requestId, title: t.title, hint: t.hint, sort_order: t.sort_order }));
+    await db.from("request_milestones").insert(rows);
+    return { error: "" };
+  } catch {
+    return { error: "" };
+  }
 }
 
 /** Admin edits the per-request milestone list (tweak the template for this task). */
