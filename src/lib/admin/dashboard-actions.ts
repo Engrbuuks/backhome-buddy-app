@@ -53,7 +53,7 @@ export async function getDashboardStats() {
     // payout queue: completed awaiting payout
     db.from("requests").select("buddy_payout_ngn").eq("status", "completed").limit(500),
     // revenue this month (client price on paid+ this month)
-    db.from("requests").select("client_price_ngn, created_at").gte("created_at", monthStart).in("status", ["paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"]).limit(1000),
+    db.from("requests").select("client_price_ngn, service_revenue_ngn, created_at").gte("created_at", monthStart).in("status", ["paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"]).limit(1000),
     // funds held (paid but not yet completed/paid_out)
     db.from("requests").select("client_price_ngn").in("status", ["paid", "assigned", "in_progress", "proof_ready", "proof_approved"]).limit(1000),
     // recent requests
@@ -82,7 +82,7 @@ export async function getDashboardStats() {
     clients: { total: clientsTotal, thisMonth: clientsThisMonth },
     money: {
       heldNgn: sum(heldRows.data, "client_price_ngn"),
-      monthRevenueNgn: sum(monthRevenueRows.data, "client_price_ngn"),
+      monthRevenueNgn: (monthRevenueRows.data ?? []).reduce((s, r: any) => s + (r.service_revenue_ngn != null ? Number(r.service_revenue_ngn) : Number(r.client_price_ngn) || 0), 0),
       payoutDueNgn: sum(payoutQueueRows.data, "buddy_payout_ngn"),
     },
     recent: recentReqRows.data ?? [],

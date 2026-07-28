@@ -27,6 +27,7 @@ const NAV = [
   { href: "/admin/services", label: "Service Pricing", icon: Package },
   { href: "/admin/milestones", label: "Milestone Templates", icon: Package },
   { href: "/admin/testimonials", label: "Testimonials", icon: Star },
+  { href: "/admin/accounting", label: "Accounting", icon: Wallet },
   { href: "/admin/regions", label: "Regions", icon: MapPin },
   { href: "/admin/ledger", label: "Ledger", icon: Receipt },
   { href: "/admin/fx", label: "Currency & Banking", icon: Receipt },

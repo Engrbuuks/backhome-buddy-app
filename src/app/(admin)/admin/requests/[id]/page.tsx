@@ -13,6 +13,7 @@ import { listCharges } from "@/lib/admin/charge-actions";
 import { getUrgentSurchargePct } from "@/lib/admin/config-actions";
 import { getRequestMilestones } from "@/lib/requests/milestone-actions";
 import AdminMilestones from "./AdminMilestones";
+import ReclassifyItems from "./ReclassifyItems";
 
 export default async function AdminRequestPage({ params }: { params: { id: string } }) {
   const request = await getRequestForAdmin(params.id);
@@ -27,7 +28,7 @@ export default async function AdminRequestPage({ params }: { params: { id: strin
       request={request}
       expectations={request.expectations}
       urgentSurchargePct={urgentPct}
-      actionSlot={<><MarkNotificationsRead link={`/admin/requests/${request.id}`} /><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}{["assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"].includes(request.status) && <AdminMilestones requestId={request.id} initial={milestones} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
+      actionSlot={<><MarkNotificationsRead link={`/admin/requests/${request.id}`} /><WorkflowPanel request={request} buddies={buddies} />{(charges.length > 0 || ["paid", "assigned", "in_progress", "proof_submitted"].includes(request.status)) && <ChargesPanel request={request} charges={charges} />}{["assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"].includes(request.status) && <AdminMilestones requestId={request.id} initial={milestones} />}{["quoted", "awaiting_pay", "paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"].includes(request.status) && (request.quote_items ?? []).length > 0 && <ReclassifyItems items={request.quote_items} />}<AiAssist request={request} /><RequestMessages requestId={request.id} viewer="admin" /><DeleteTaskPanel requestId={request.id} title={request.title} /></>}
     />
   );
 }

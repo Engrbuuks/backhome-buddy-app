@@ -11,10 +11,10 @@ import { acceptCounterOffer } from "@/lib/admin/quote-actions";
 import { resendQuote } from "@/lib/admin/quote-actions";
 import { aiSuggestQuoteItems } from "@/lib/ai/assist-actions";
 
-interface Item { label: string; amount_ngn: number }
+interface Item { label: string; amount_ngn: number; item_type?: "service" | "purchase" }
 
 export default function QuoteBuilder({ request, actionSlot, expectations, urgentSurchargePct = 40 }: { request: any; actionSlot?: React.ReactNode; expectations?: string | null; urgentSurchargePct?: number }) {
-  const existing: Item[] = (request.quote_items ?? []).map((q: any) => ({ label: q.label, amount_ngn: Number(q.amount_ngn) }));
+  const existing: Item[] = (request.quote_items ?? []).map((q: any) => ({ label: q.label, amount_ngn: Number(q.amount_ngn), item_type: q.item_type || "service" }));
   const basePrice = Number(request.service_types?.base_price_ngn ?? 0);
   const defaults: Item[] = [{ label: request.service_types?.name ?? "Service", amount_ngn: basePrice }];
   if (request.urgency === "urgent") {
@@ -27,6 +27,9 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
   const [pending, startTransition] = useTransition();
 
   const total = useMemo(() => items.reduce((s, i) => s + Number(i.amount_ngn || 0), 0), [items]);
+  const serviceTotal = useMemo(() => items.filter((i) => (i.item_type || "service") !== "purchase").reduce((s, i) => s + Number(i.amount_ngn || 0), 0), [items]);
+  const purchaseTotal = useMemo(() => items.filter((i) => (i.item_type || "service") === "purchase").reduce((s, i) => s + Number(i.amount_ngn || 0), 0), [items]);
+  const netProfit = serviceTotal - (payout || 0);
   const defaultPct = Number(request.service_types?.default_buddy_payout_pct ?? 60);
   const suggested = Math.round(total * defaultPct / 100);
   const margin = total - (payout || 0);
@@ -113,14 +116,22 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
         <section className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-extrabold">Line items</h2>
-            <button onClick={() => setItems((a) => [...a, { label: "", amount_ngn: 0 }])} className="flex items-center gap-1 rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold hover:border-bbb-strong"><Plus className="h-3.5 w-3.5" />Add item</button>
+            <button onClick={() => setItems((a) => [...a, { label: "", amount_ngn: 0, item_type: "service" }])} className="flex items-center gap-1 rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold hover:border-bbb-strong"><Plus className="h-3.5 w-3.5" />Add item</button>
             {quotable && <button disabled={pending} onClick={aiSuggest} className="rounded-xl border border-bbb-border px-3 py-1.5 text-xs font-bold text-bbb-strong hover:border-bbb-strong disabled:opacity-50">{pending ? "…" : "✦ AI suggest items"}</button>}
           </div>
+          <p className="mb-3 text-xs text-bbb-slate">Mark items you&apos;re <strong>buying on the client&apos;s behalf</strong> as &quot;Purchase&quot; — that money passes through you and isn&apos;t counted as revenue.</p>
           <div className="space-y-3">
             {items.map((it, i) => (
-              <div key={i} className="grid grid-cols-[1fr_140px_auto] items-end gap-3">
+              <div key={i} className="grid grid-cols-[1fr_130px_120px_auto] items-end gap-3">
                 <Field label={i === 0 ? "Item" : ""} value={it.label} onChange={(e) => update(i, { label: e.target.value })} placeholder="e.g. Site visit" />
                 <Field label={i === 0 ? "Amount (₦)" : ""} type="number" value={String(it.amount_ngn)} onChange={(e) => update(i, { amount_ngn: Number(e.target.value) })} />
+                <div>
+                  {i === 0 && <label className="mb-1 block text-xs font-bold text-bbb-slate">Type</label>}
+                  <select value={it.item_type || "service"} onChange={(e) => update(i, { item_type: e.target.value as "service" | "purchase" })} className="h-11 w-full rounded-xl border border-bbb-border bg-white px-2 text-sm outline-none focus:border-bbb-strong">
+                    <option value="service">Service</option>
+                    <option value="purchase">Purchase</option>
+                  </select>
+                </div>
                 <button onClick={() => setItems((a) => a.filter((_, idx) => idx !== i))} className="grid h-11 w-11 place-items-center rounded-xl border border-bbb-border text-bbb-slate hover:border-red-300 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
               </div>
             ))}
@@ -130,14 +141,21 @@ export default function QuoteBuilder({ request, actionSlot, expectations, urgent
         <aside className="space-y-4">
           <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
             <div className="flex items-center justify-between"><span className="text-sm text-bbb-slate">Client price</span><span className="font-display text-xl font-extrabold">{formatNGN(total)}</span></div>
+            {purchaseTotal > 0 && (
+              <div className="mt-2 space-y-1 rounded-xl bg-bbb-bg p-2 text-xs">
+                <div className="flex justify-between"><span className="text-bbb-slate">Service revenue</span><span className="font-bold text-bbb-dark">{formatNGN(serviceTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-bbb-slate">Purchases (passthrough)</span><span className="font-semibold text-bbb-slate">{formatNGN(purchaseTotal)}</span></div>
+              </div>
+            )}
             <div className="mt-4">
               <Field label={`Buddy payout (₦) — suggested ${defaultPct}%: ${formatNGN(suggested)}`} type="number" value={String(payout)} onChange={(e) => setPayout(Number(e.target.value))} />
               <button onClick={() => setPayout(suggested)} className="mt-1 text-xs font-bold text-bbb-strong hover:text-bbb-dark">Use suggested</button>
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-bbb-border pt-3">
-              <span className="text-sm font-bold">Your margin</span>
-              <span className={`font-display text-lg font-extrabold ${margin < 0 ? "text-red-600" : "text-bbb-dark"}`}>{formatNGN(margin)}</span>
+              <span className="text-sm font-bold">Your profit</span>
+              <span className={`font-display text-lg font-extrabold ${netProfit < 0 ? "text-red-600" : "text-bbb-dark"}`}>{formatNGN(netProfit)}</span>
             </div>
+            <p className="mt-1 text-[11px] text-bbb-slate">Profit = service revenue − buddy payout{purchaseTotal > 0 ? " (purchases excluded)" : ""}.</p>
             <p className="mt-2 text-[11px] text-bbb-slate">The buddy never sees the client price — only their payout.</p>
           </div>
           <button disabled={pending || !quotable} onClick={submit} className="h-12 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">

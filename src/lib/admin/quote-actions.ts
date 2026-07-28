@@ -16,9 +16,55 @@ import { notify } from "@/lib/notifications/notify";
  *   4. write atomically via service-role
  *   5. record the transition in request_timeline
  */
+/** Reclassify a single quote line item as service vs purchase AFTER quoting,
+ *  then recompute the request's service revenue. Does NOT change the client
+ *  price, buddy payout, or task status — it only corrects the accounting split.
+ *  Use this to fix historical tasks where a purchase was counted as revenue. */
+export async function reclassifyQuoteItem(itemId: string, itemType: "service" | "purchase") {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") return { error: "Not authorized." };
+  const db = createAdminClient();
+
+  const { data: item } = await db.from("quote_items").select("id, request_id").eq("id", itemId).maybeSingle();
+  if (!item) return { error: "Line item not found." };
+
+  const { error: upErr } = await db.from("quote_items").update({ item_type: itemType }).eq("id", itemId);
+  if (upErr) return { error: upErr.message };
+
+  // Recompute service revenue from all this request's items.
+  const { data: allItems } = await db.from("quote_items").select("amount_ngn, item_type").eq("request_id", item.request_id);
+  const serviceRevenue = (allItems ?? [])
+    .filter((i: any) => (i.item_type || "service") !== "purchase")
+    .reduce((s: number, i: any) => s + Number(i.amount_ngn || 0), 0);
+  await db.from("requests").update({ service_revenue_ngn: serviceRevenue }).eq("id", item.request_id);
+
+  await db.from("audit_log").insert({
+    actor_id: profile.id, action: "reclassify_quote_item", target_id: item.request_id,
+    detail: { item_id: itemId, item_type: itemType, new_service_revenue: serviceRevenue },
+  });
+  revalidatePath(`/admin/requests/${item.request_id}`);
+  revalidatePath("/admin/accounting");
+  return { error: "", serviceRevenue };
+}
+
+/** Recompute service revenue for a request from its current items (helper for
+ *  fixing legacy tasks in bulk if needed). */
+export async function recomputeServiceRevenue(requestId: string) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.role !== "admin") return { error: "Not authorized." };
+  const db = createAdminClient();
+  const { data: allItems } = await db.from("quote_items").select("amount_ngn, item_type").eq("request_id", requestId);
+  const serviceRevenue = (allItems ?? [])
+    .filter((i: any) => (i.item_type || "service") !== "purchase")
+    .reduce((s: number, i: any) => s + Number(i.amount_ngn || 0), 0);
+  await db.from("requests").update({ service_revenue_ngn: serviceRevenue }).eq("id", requestId);
+  revalidatePath(`/admin/requests/${requestId}`);
+  return { error: "", serviceRevenue };
+}
+
 export async function sendQuote(input: {
   requestId: string;
-  items: { label: string; amount_ngn: number }[];
+  items: { label: string; amount_ngn: number; item_type?: "service" | "purchase" }[];
   buddy_payout_ngn: number;
 }) {
   const profile = await getCurrentProfile();
@@ -27,6 +73,11 @@ export async function sendQuote(input: {
   const items = (input.items ?? []).filter((i) => i.label.trim() && Number(i.amount_ngn) > 0);
   if (items.length === 0) return { error: "Add at least one line item." };
   const clientPrice = items.reduce((s, i) => s + Number(i.amount_ngn), 0);
+  // Service revenue = the money you actually earn. Purchases are passthrough
+  // (client's money spent on their behalf) and are NOT revenue.
+  const serviceRevenue = items
+    .filter((i) => (i.item_type || "service") !== "purchase")
+    .reduce((s, i) => s + Number(i.amount_ngn), 0);
   const payout = Number(input.buddy_payout_ngn);
   if (!(payout > 0)) return { error: "Set the buddy payout." };
   if (payout >= clientPrice) return { error: "Buddy payout must be less than the client price (margin can't be negative)." };
@@ -42,13 +93,14 @@ export async function sendQuote(input: {
   const { error: delErr } = await db.from("quote_items").delete().eq("request_id", req.id);
   if (delErr) return { error: delErr.message };
   const { error: insErr } = await db.from("quote_items").insert(
-    items.map((i) => ({ request_id: req.id, label: i.label.trim(), amount_ngn: i.amount_ngn }))
+    items.map((i) => ({ request_id: req.id, label: i.label.trim(), amount_ngn: i.amount_ngn, item_type: i.item_type || "service" }))
   );
   if (insErr) return { error: insErr.message };
   const lockedRate = await getUsdRate();
   const { error: upErr } = await db.from("requests").update({
     fx_rate: lockedRate,
     client_price_ngn: clientPrice,
+    service_revenue_ngn: serviceRevenue,
     buddy_payout_ngn: payout,
     status: "quoted",
       quote_decision: null,
@@ -64,7 +116,7 @@ export async function sendQuote(input: {
   });
   await db.from("audit_log").insert({
     actor_id: profile.id, action: "send_quote", target_id: req.id,
-    detail: { client_price_ngn: clientPrice, buddy_payout_ngn: payout },
+    detail: { client_price_ngn: clientPrice, service_revenue_ngn: serviceRevenue, buddy_payout_ngn: payout },
   });
 
   const { data: reqOwner } = await db.from("requests").select("client_id, title").eq("id", req.id).single();
@@ -89,7 +141,7 @@ export async function getRequestForAdmin(id: string) {  const profile = await ge
   const db = createAdminClient();
   const { data } = await db
     .from("requests")
-    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), regions(name, zone), quote_items(id, label, amount_ngn), proofs(id, kind, note, file_url, created_at, captured_lat, captured_lng, captured_accuracy, captured_at, server_received_at, capture_method), profiles!requests_client_id_fkey(full_name, email)")
+    .select("*, service_types(name, base_price_ngn, default_buddy_payout_pct), regions(name, zone), quote_items(id, label, amount_ngn, item_type), proofs(id, kind, note, file_url, created_at, captured_lat, captured_lng, captured_accuracy, captured_at, server_received_at, capture_method), profiles!requests_client_id_fkey(full_name, email)")
     .eq("id", id)
     .single();
   return data;
