@@ -132,7 +132,7 @@ export async function respondToQuote(_prev: unknown, formData: FormData) {
   if (decision === "changes_requested" && !note) return { error: "Tell us what you'd like changed." };
 
   const db = createAdminClient();
-  const { data: req } = await db.from("requests").select("id, client_id, title, status, client_price_ngn, negotiation_rounds").eq("id", requestId).maybeSingle();
+  const { data: req } = await db.from("requests").select("*").eq("id", requestId).maybeSingle();
   if (!req || req.client_id !== profile.id) return { error: "Request not found." };
   if (req.status !== "quoted") return { error: "This quote can no longer be responded to." };
 

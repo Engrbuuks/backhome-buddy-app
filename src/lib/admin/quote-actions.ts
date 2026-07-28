@@ -103,7 +103,7 @@ export async function acceptCounterOffer(requestId: string) {
   if (!profile || profile.role !== "admin") return { error: "Not authorized." };
   const db = createAdminClient();
   const { data: req } = await db.from("requests")
-    .select("id, status, title, client_id, counter_amount_ngn, buddy_payout_ngn")
+    .select("*")
     .eq("id", requestId).maybeSingle();
   if (!req) return { error: "Request not found." };
   if (req.status !== "quoted") return { error: "Only an active quote can be settled." };
