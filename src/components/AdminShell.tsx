@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Inbox, UserCheck, ShieldCheck, Wallet, RotateCcw,
   AlertTriangle, Users, Package, MapPin, Receipt, Bell, UserCog, MessageSquare, HardDriveDownload, UserPlus,
 LogOut, Menu, X, BookOpen,
+  Star,
 } from "lucide-react";
 
 import { NotificationBadge } from "@/components/NotificationBadge";
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/admin/recruitment", label: "Recruitment", icon: UserPlus },
   { href: "/admin/services", label: "Service Pricing", icon: Package },
   { href: "/admin/milestones", label: "Milestone Templates", icon: Package },
+  { href: "/admin/testimonials", label: "Testimonials", icon: Star },
   { href: "/admin/regions", label: "Regions", icon: MapPin },
   { href: "/admin/ledger", label: "Ledger", icon: Receipt },
   { href: "/admin/fx", label: "Currency & Banking", icon: Receipt },
