@@ -37,7 +37,11 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
           <div className="mt-3"><BestFitBuddies requestId={request.id} onPick={(id) => setBuddyId(id)} /></div>
           {(() => {
             const reqState = (request.regions?.name ?? "").toLowerCase();
-            const local = reqState ? buddies.filter((b: any) => (b.state ?? "").toLowerCase() === reqState || (b.coverage_areas ?? "").toLowerCase().includes(reqState)) : [];
+            // coverage_areas may be an array (current) or a string (legacy) — normalise to a searchable string.
+            const coverageStr = (b: any) => Array.isArray(b?.coverage_areas)
+              ? b.coverage_areas.join(" ").toLowerCase()
+              : String(b?.coverage_areas ?? "").toLowerCase();
+            const local = reqState ? buddies.filter((b: any) => (b.state ?? "").toLowerCase() === reqState || coverageStr(b).includes(reqState)) : [];
             const others = local.length ? buddies.filter((b: any) => !local.includes(b)) : buddies;
             const label = (b: any) => `${b.profiles?.full_name ?? b.profiles?.email}${b.city ? ` · ${b.city}` : ""}${b.state ? `, ${b.state}` : ""}${Array.isArray(b.skills) && b.skills.length ? ` · ${b.skills.slice(0,2).join(", ")}` : ""}`;
             return (

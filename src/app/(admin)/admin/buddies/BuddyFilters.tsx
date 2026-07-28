@@ -30,7 +30,7 @@ export function applyBuddyFilters<T extends any>(buddies: T[], f: BuddyFilterVal
     if (opts.showVetting && f.vetting && (b.vetting ?? "") !== f.vetting) return false;
     if (f.speciality) {
       const skills = (Array.isArray(b.skills) ? b.skills.join(" ") : String(b.skills ?? "")).toLowerCase();
-      const cov = (b.coverage_areas ?? "").toLowerCase();
+      const cov = (Array.isArray(b.coverage_areas) ? b.coverage_areas.join(" ") : String(b.coverage_areas ?? "")).toLowerCase();
       if (!skills.includes(f.speciality.toLowerCase()) && !cov.includes(f.speciality.toLowerCase())) return false;
     }
     if (f.qualification) {
