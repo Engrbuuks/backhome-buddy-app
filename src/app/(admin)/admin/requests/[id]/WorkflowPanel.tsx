@@ -4,6 +4,7 @@ import { ErrorState } from "@/components/StateBlocks";
 import { recordManualPayment, assignBuddy, reviewProof } from "@/lib/admin/workflow-actions";
 import BestFitBuddies from "./BestFitBuddies";
 import { ProofMedia } from "@/components/ProofMedia";
+import AdjustPayout from "./AdjustPayout";
 
 export default function WorkflowPanel({ request, buddies }: { request: any; buddies: any[] }) {
   const [error, setError] = useState("");
@@ -81,6 +82,10 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
       {["assigned", "in_progress"].includes(request.status) && <p className="mt-3 text-sm text-bbb-slate">Waiting on the buddy ({request.status === "assigned" ? "not started yet" : "working"}). Proof will appear here for review.</p>}
       {request.status === "proof_approved" && <p className="mt-3 text-sm text-bbb-slate">Approved — waiting for the client to confirm completion. Then the payout becomes eligible.</p>}
       {request.status === "completed" && <p className="mt-3 text-sm font-bold text-bbb-dark">Completed and client-confirmed. Release it from the Payouts Queue.</p>}
+
+      {["assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"].includes(request.status) && request.assigned_buddy_id && (
+        <AdjustPayout requestId={request.id} current={Number(request.buddy_payout_ngn ?? 0)} status={request.status} />
+      )}
     </div>
   );
 }

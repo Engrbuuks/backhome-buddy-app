@@ -95,9 +95,71 @@ export async function reviewProof(requestId: string, approve: boolean, note: str
   return { error: "" };
 }
 
-/** Record a manual payout (bank transfer you made to the buddy). completed → paid_out. */
-export async function releaseManualPayout(requestId: string) {
+/** Adjust a buddy's payout on a task that's already past the quoting stage
+ *  (e.g. completed). Works two ways:
+ *   - Not yet paid out: simply updates the payout amount, so the correct figure
+ *     is released when you pay out.
+ *   - Already paid out: records a top-up (or claws back) for the DIFFERENCE only,
+ *     so the buddy's total received equals the new amount and the ledger stays right.
+ */
+export async function adjustBuddyPayout(requestId: string, newAmountNgn: number, reason?: string) {
   const p = await admin(); if (!p) return { error: "Not authorized." };
+  const amount = Math.round(Number(newAmountNgn));
+  if (!Number.isFinite(amount) || amount < 0) return { error: "Enter a valid payout amount." };
+  const db = createAdminClient();
+
+  const { data: req } = await db.from("requests")
+    .select("id, status, assigned_buddy_id, buddy_payout_ngn, client_price_ngn").eq("id", requestId).single();
+  if (!req) return { error: "Request not found." };
+  if (!req.assigned_buddy_id) return { error: "No buddy is assigned to this task." };
+
+  // Never let the payout meet or exceed what the client paid.
+  const clientPrice = Number(req.client_price_ngn ?? 0);
+  if (clientPrice > 0 && amount >= clientPrice) {
+    return { error: `Payout (${amount.toLocaleString()}) can't be equal to or above the client price (${clientPrice.toLocaleString()}).` };
+  }
+
+  const old = Number(req.buddy_payout_ngn ?? 0);
+  if (amount === old) return { error: "That's the same as the current payout." };
+
+  // Always update the stored payout figure.
+  await db.from("requests").update({ buddy_payout_ngn: amount }).eq("id", requestId);
+
+  const alreadyPaid = req.status === "paid_out";
+  if (alreadyPaid) {
+    // Record the difference so the ledger and the buddy's earnings reflect reality.
+    const diff = amount - old; // positive = top-up owed to buddy; negative = overpaid
+    await db.from("payouts").insert({
+      request_id: req.id, buddy_id: req.assigned_buddy_id, provider: "manual",
+      provider_reference: `payout-adjust-${req.id}-${Date.now()}`,
+      amount_ngn: diff, status: "paid",
+    });
+    await db.from("transactions").insert({
+      kind: "payout", request_id: req.id, amount_ngn: -diff,
+      note: `Payout adjustment (${diff >= 0 ? "top-up" : "correction"})${reason ? `: ${reason}` : ""}`,
+    });
+    if (diff > 0) {
+      await notify(req.assigned_buddy_id, "Extra payout sent",
+        `We've sent you an additional ${diff.toLocaleString()} for a completed task.`, "/buddy/earnings");
+    }
+  } else {
+    // Not paid out yet — the new amount will simply be used at release time.
+    if (amount > old) {
+      await notify(req.assigned_buddy_id, "Your payout was increased",
+        "Good news — your payout for this task has been increased.", `/buddy/tasks/${req.id}`);
+    }
+  }
+
+  await db.from("audit_log").insert({
+    actor_id: p.id, action: "adjust_buddy_payout", target_id: req.id,
+    detail: { from: old, to: amount, already_paid: alreadyPaid, reason: reason || null },
+  });
+  revalidatePath(`/admin/requests/${req.id}`); revalidatePath("/admin/payouts");
+  return { error: "", alreadyPaid, diff: amount - old };
+}
+
+/** Record a manual payout (bank transfer you made to the buddy). completed → paid_out. */
+export async function releaseManualPayout(requestId: string) {  const p = await admin(); if (!p) return { error: "Not authorized." };
   const db = createAdminClient();
   const { data: req } = await db.from("requests")
     .select("id, status, assigned_buddy_id, buddy_payout_ngn").eq("id", requestId).single();
