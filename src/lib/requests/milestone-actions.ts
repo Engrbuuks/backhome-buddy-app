@@ -41,7 +41,29 @@ export async function getRequestMilestones(requestId: string) {
     const db = createAdminClient();
     const { data, error } = await db.from("request_milestones").select("*").eq("request_id", requestId).order("sort_order");
     if (error) return []; // table may not exist yet (migration not run) — degrade quietly
-    return data ?? [];
+    const milestones = data ?? [];
+    if (!milestones.length) return milestones;
+
+    // Attach each milestone's proof photo/video (the buddy's upload for that step).
+    try {
+      const ids = milestones.map((m: any) => m.id);
+      const { data: proofs } = await db
+        .from("proofs")
+        .select("id, milestone_id, kind, file_url, created_at")
+        .in("milestone_id", ids)
+        .order("created_at", { ascending: false });
+      if (proofs?.length) {
+        const { signProofUrls } = await import("@/lib/storage/sign");
+        const signed = await signProofUrls(proofs as any[]);
+        // Latest proof per milestone.
+        const byMilestone = new Map<string, any>();
+        for (const pr of signed) {
+          if (pr.milestone_id && !byMilestone.has(pr.milestone_id)) byMilestone.set(pr.milestone_id, pr);
+        }
+        return milestones.map((m: any) => ({ ...m, proof: byMilestone.get(m.id) || null }));
+      }
+    } catch { /* if signing/proof fetch fails, still return milestones without images */ }
+    return milestones.map((m: any) => ({ ...m, proof: null }));
   } catch {
     return [];
   }

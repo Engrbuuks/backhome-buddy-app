@@ -3,7 +3,7 @@ import React, { useState, useTransition } from "react";
 import { Plus, Trash2, CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { saveRequestMilestones } from "@/lib/requests/milestone-actions";
 
-type M = { id?: string; title: string; hint?: string | null; done?: boolean; note?: string | null };
+type M = { id?: string; title: string; hint?: string | null; done?: boolean; note?: string | null; proof?: any };
 
 /** Admin edits the milestone list for THIS task (tweaked from the template) and
  *  sees which are complete vs missing. */
@@ -43,6 +43,19 @@ export default function AdminMilestones({ requestId, initial }: { requestId: str
             </div>
             <input value={r.hint || ""} onChange={(e) => set(i, "hint", e.target.value)} placeholder="Hint — what to capture" className="mt-2 h-8 w-full rounded-lg border border-bbb-border px-2 text-xs outline-none focus:border-bbb-strong" />
             {r.done && r.note && <p className="mt-1 text-xs text-green-700">Buddy note: {r.note}</p>}
+            {r.done && (r as any).proof?.signedUrl && (
+              <a href={(r as any).proof.signedUrl} target="_blank" rel="noreferrer" className="mt-2 block">
+                {(r as any).proof.kind === "video" ? (
+                  <video src={(r as any).proof.signedUrl} className="h-32 w-full rounded-lg object-cover" preload="metadata" />
+                ) : (
+                  <img src={(r as any).proof.signedUrl} alt={`Proof for ${r.title}`} className="h-32 w-full rounded-lg object-cover" />
+                )}
+                <span className="mt-1 block text-[11px] font-semibold text-bbb-strong">Open full size →</span>
+              </a>
+            )}
+            {r.done && !(r as any).proof?.signedUrl && (
+              <p className="mt-1 text-[11px] text-amber-600">Marked done, but no image is attached.</p>
+            )}
           </div>
         ))}
       </div>

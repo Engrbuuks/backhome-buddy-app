@@ -77,7 +77,7 @@ export async function deleteRequest(requestId: string) {
   if (!requestId) return { error: "Missing request." };
   const db = createAdminClient();
 
-  // 1) Remove proof files from storage first (cascade will drop the rows).
+  // 1) Remove proof files from storage first (before rows are gone).
   const { data: proofs } = await db.from("proofs").select("file_url").eq("request_id", requestId).not("file_url", "is", null);
   if (proofs?.length) {
     const keys = proofs.map((x: any) => x.file_url).filter(Boolean);
@@ -88,13 +88,44 @@ export async function deleteRequest(requestId: string) {
     try { await db.storage.from("proofs").remove(keys); } catch {}
   }
 
-  // 2) Delete the request — FK cascade (migration 0023) removes children.
+  // 2) Explicitly delete every child that references this request, in an order
+  //    that never violates a foreign key. We don't rely solely on ON DELETE
+  //    CASCADE, because if any cascade migration wasn't applied the delete would
+  //    fail with an FK error. Each table is best-effort: a missing table is
+  //    simply skipped. This makes deletion robust across migration states.
+  const childTables = [
+    "request_milestones", "request_messages", "request_timeline",
+    "quote_items", "extra_charges", "expectations", "recipients",
+    "disputes", "payouts", "refunds", "payments", "proofs",
+  ];
+  for (const t of childTables) {
+    try { await db.from(t).delete().eq("request_id", requestId); } catch { /* table may not exist */ }
+  }
+  // Ledger rows: detach rather than delete, to preserve financial history.
+  try { await db.from("transactions").update({ request_id: null }).eq("request_id", requestId); } catch {}
+  // Remove in-app notifications that point at this request (link-based, no FK).
+  try { await db.from("notifications").delete().like("link", `%/requests/${requestId}%`); } catch {}
+
+  // 3) Delete the request itself.
   const { error } = await db.from("requests").delete().eq("id", requestId);
   if (error) return { error: `Could not delete: ${error.message}` };
 
   await db.from("audit_log").insert({ actor_id: p.id, action: "delete_request", target_id: requestId, detail: {} });
   revalidatePath("/admin/requests"); revalidatePath("/admin");
   return { error: "" };
+}
+
+/** Delete several requests at once (for clearing test data). Admin only. */
+export async function deleteRequestsBulk(requestIds: string[]): Promise<{ deleted: number; failed: number; error: string }> {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { deleted: 0, failed: 0, error: "Not authorised." };
+  let deleted = 0, failed = 0;
+  for (const id of requestIds.slice(0, 200)) {
+    const r = await deleteRequest(id);
+    if (r.error) failed++; else deleted++;
+  }
+  revalidatePath("/admin/requests");
+  return { deleted, failed, error: "" };
 }
 
 /** Delete a user (client or buddy): removes their auth account, which cascades

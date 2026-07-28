@@ -7,6 +7,7 @@ import { formatClientMoneyIn, formatDate } from "@/components/money";
 import { useState, useTransition } from "react";
 import { confirmCompletion } from "@/lib/requests/confirm-actions";
 import ClientCharges from "./ClientCharges";
+import ClientMilestones from "./ClientMilestones";
 import QuoteResponse from "./QuoteResponse";
 import { cancelRequest, raiseDispute } from "@/lib/money/edge-actions";
 import { ProofMedia } from "@/components/ProofMedia";
@@ -16,7 +17,7 @@ import { ErrorState } from "@/components/StateBlocks";
 const LIFECYCLE = ["submitted", "quoted", "paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed"] as const;
 const PROOF_ICON = { photo: Camera, video: Video, report: FileText } as const;
 
-export default function RequestDetails({ request, charges = [], currency = "USD", rates, bank }: { request: any; charges?: any[]; currency?: any; rates?: any; bank?: any }) {
+export default function RequestDetails({ request, charges = [], currency = "USD", rates, bank, milestones = [] }: { request: any; charges?: any[]; currency?: any; rates?: any; bank?: any; milestones?: any[] }) {
   const [confirmError, setConfirmError] = useState("");
   const [confirming, startConfirm] = useTransition();
   const [cancelError, setCancelError] = useState("");
@@ -62,6 +63,10 @@ export default function RequestDetails({ request, charges = [], currency = "USD"
               ))}
             </div>
           </div>
+
+          {milestones.length > 0 && (
+            <div className="mb-4"><ClientMilestones milestones={milestones} /></div>
+          )}
 
           <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
             <h2 className="font-display text-lg font-extrabold">Proof gallery</h2>

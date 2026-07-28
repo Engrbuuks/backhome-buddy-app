@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useTransition } from "react";
-import { CheckCircle2, Circle, Upload, Loader2 } from "lucide-react";
+import { CheckCircle2, Circle, Upload, Loader2, Camera } from "lucide-react";
 import { uploadToR2 } from "@/lib/storage/upload-client";
 import { completeMilestone } from "@/lib/requests/milestone-actions";
 
-type M = { id: string; title: string; hint?: string | null; done: boolean; note?: string | null };
+type M = { id: string; title: string; hint?: string | null; done: boolean; note?: string | null; proof?: any };
 
 /** Structured proof: each milestone needs a photo/video + a note before it's
  *  marked done. Partial is allowed — the buddy completes what they can. */
@@ -33,6 +33,8 @@ function MilestoneRow({ requestId, m }: { requestId: string; m: M }) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState("");
   const [done, setDone] = useState(m.done);
+  const cameraRef = React.useRef<HTMLInputElement>(null);
+  const galleryRef = React.useRef<HTMLInputElement>(null);
 
   const submit = () => start(async () => {
     setErr("");
@@ -58,6 +60,13 @@ function MilestoneRow({ requestId, m }: { requestId: string; m: M }) {
           <p className="font-bold text-bbb-charcoal">{m.title}</p>
           {m.hint && <p className="mt-0.5 text-xs text-bbb-slate">{m.hint}</p>}
           {done && m.note && <p className="mt-1 text-xs text-green-700">Your note: {m.note}</p>}
+          {done && (m as any).proof?.signedUrl && (
+            <a href={(m as any).proof.signedUrl} target="_blank" rel="noreferrer" className="mt-2 block">
+              {(m as any).proof.kind === "video"
+                ? <video src={(m as any).proof.signedUrl} className="h-28 w-full rounded-lg object-cover" preload="metadata" />
+                : <img src={(m as any).proof.signedUrl} alt={m.title} className="h-28 w-full rounded-lg object-cover" />}
+            </a>
+          )}
           {!done && !open && (
             <button onClick={() => setOpen(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-bbb-strong px-3 py-1.5 text-xs font-bold text-white hover:bg-bbb-dark">
               <Upload className="h-3.5 w-3.5" /> Add photo/video + note
@@ -65,8 +74,19 @@ function MilestoneRow({ requestId, m }: { requestId: string; m: M }) {
           )}
           {open && !done && (
             <div className="mt-3 space-y-2">
-              <input type="file" accept="image/*,video/*" capture="environment" onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="block w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-bbb-strong file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-white" />
+              {/* Two hidden inputs: camera forces live capture; gallery lets them
+                  pick an existing photo/video already on the phone. */}
+              <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <input ref={galleryRef} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => cameraRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg bg-bbb-strong px-3 py-2 text-xs font-bold text-white hover:bg-bbb-dark">
+                  <Camera className="h-3.5 w-3.5" /> Take photo/video
+                </button>
+                <button type="button" onClick={() => galleryRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-bbb-border px-3 py-2 text-xs font-bold text-bbb-slate hover:border-bbb-strong">
+                  <Upload className="h-3.5 w-3.5" /> Choose from phone
+                </button>
+              </div>
+              {file && <p className="text-xs font-semibold text-green-700">Attached: {file.name}</p>}
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Short note about this step…"
                 className="w-full rounded-lg border border-bbb-border p-2 text-sm outline-none focus:border-bbb-strong" />
               {err && <p className="text-xs font-semibold text-red-600">{err}</p>}
