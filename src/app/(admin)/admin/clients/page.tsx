@@ -7,6 +7,7 @@ import { formatNGN, formatDate } from "@/components/money";
 import { getCurrentProfile } from "@/lib/auth/roles";
 import { redirect } from "next/navigation";
 import { Users, UserPlus } from "lucide-react";
+import ClientsTable from "./ClientsTable";
 
 export const dynamic = "force-dynamic";
 const PAGE_SIZE = 25;
@@ -44,35 +45,7 @@ export default async function ClientsPage({ searchParams }: { searchParams?: { p
       {rows.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-bbb-border bg-white p-8 text-center text-sm text-bbb-slate">No clients yet.</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-bbb-border bg-white shadow-soft">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-bbb-border bg-bbb-bg text-left text-xs uppercase tracking-wide text-bbb-slate">
-                <th className="px-4 py-3 font-bold">Client</th>
-                <th className="px-4 py-3 font-bold">Joined</th>
-                <th className="px-4 py-3 text-center font-bold">Requests</th>
-                <th className="px-4 py-3 text-right font-bold">Spend</th>
-                <th className="px-4 py-3 font-bold">Last active</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr key={c.id} className="cursor-pointer border-b border-bbb-border last:border-0 hover:bg-bbb-bg/50">
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/clients/${c.id}`} className="block">
-                      <p className="font-semibold text-bbb-strong hover:underline">{c.full_name || "—"}</p>
-                      <p className="text-xs text-bbb-slate">{c.email || "—"}{c.phone ? ` · ${c.phone}` : ""}</p>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-bbb-slate"><Link href={`/admin/clients/${c.id}`} className="block">{formatDate(c.created_at)}</Link></td>
-                  <td className="px-4 py-3 text-center font-bold"><Link href={`/admin/clients/${c.id}`} className="block">{c.requestCount}</Link></td>
-                  <td className="px-4 py-3 text-right font-bold"><Link href={`/admin/clients/${c.id}`} className="block">{c.totalSpendNgn > 0 ? formatNGN(c.totalSpendNgn) : "—"}</Link></td>
-                  <td className="px-4 py-3 text-bbb-slate"><Link href={`/admin/clients/${c.id}`} className="block">{c.lastRequestAt ? formatDate(c.lastRequestAt) : "No requests"}</Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ClientsTable rows={rows} />
       )}
       <Pager page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/clients" />
     </AdminShell>

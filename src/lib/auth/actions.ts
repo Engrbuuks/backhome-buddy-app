@@ -51,11 +51,22 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   const supabase = createClient();
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
-  const { data, error } = await supabase.auth.signUp({
-    email, password,
-    options: { data: { full_name: fullName, phone }, emailRedirectTo: `${appUrl}/login` },
-  });
-  if (error) return { error: error.message };
+  let data: any, error: any;
+  try {
+    ({ data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { full_name: fullName, phone }, emailRedirectTo: `${appUrl}/login` },
+    }));
+  } catch (e) {
+    return { error: `We couldn't reach the sign-up service just now (${e instanceof Error ? e.message : "network error"}). Please check your connection and try again.` };
+  }
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("already registered") || msg.includes("already been registered")) return { error: "An account with this email already exists. Please sign in instead." };
+    if (msg.includes("password")) return { error: "Your password doesn't meet requirements — use at least 8 characters." };
+    if (msg.includes("email") && msg.includes("invalid")) return { error: "That email address doesn't look valid — please check it." };
+    return { error: error.message };
+  }
 
   // Record the signup and alert admins — mirrors buddy applications.
   if (data.user) {
@@ -172,36 +183,59 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
 
   const supabase = createClient();
   const buddyAppUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
-  const { data, error } = await supabase.auth.signUp({
-    email, password,
-    options: { data: { full_name: fullName }, emailRedirectTo: buddyAppUrl },
-  });
+  let data: any, error: any;
+  try {
+    ({ data, error } = await supabase.auth.signUp({
+      email, password,
+      options: { data: { full_name: fullName }, emailRedirectTo: buddyAppUrl },
+    }));
+  } catch (e) {
+    return { error: `We couldn't reach the sign-up service just now (${e instanceof Error ? e.message : "network error"}). Please check your connection and try again.` };
+  }
   if (error) {
     const msg = error.message.toLowerCase();
     if (msg.includes("rate limit")) return { error: "We've hit our email-sending limit for the moment. Please try again in about an hour — your details are not lost." };
     if (msg.includes("already registered") || msg.includes("already been registered")) return { error: "An account already exists with this email. Try logging in instead, or use a different email." };
+    if (msg.includes("password")) return { error: "Your password doesn't meet requirements — use at least 8 characters with a mix of letters and numbers." };
+    if (msg.includes("email") && msg.includes("invalid")) return { error: "That email address doesn't look valid — please check it and try again." };
     return { error: error.message };
   }
   const userId = data.user?.id;
   if (!userId) return { error: "Could not create your account — please try again." };
 
-  const db = createAdminClient();
-  const { error: profErr } = await db.from("profiles").update({ role: "buddy", phone, full_name: fullName }).eq("id", userId);
-  if (profErr) return { error: `Account created but profile setup failed (${profErr.message}). Please contact support before retrying.` };
-  const { error: bpErr } = await db.from("buddy_profiles").insert({
-    id: userId, vetting: "under_review", skills,
-    city, date_of_birth: dob, nin, address, state: stateName, lga,
-    coverage_areas: coverage, occupation, experience, availability,
-    education_level: educationLevel || null, course_of_study: courseOfStudy || null,
-    year_of_graduation: yearOfGraduation, school_attended: schoolAttended || null,
-    has_smartphone: hasSmartphone, can_drive: canDrive, has_drivers_license: hasLicense,
-    criminal_record: criminalRecord === "yes", criminal_record_details: criminalDetails || null,
-    consent_background_checks: consentChecks, consent_data_processing: consentData,
-  });
-  if (bpErr) return { error: `Account created but application details failed to save (${bpErr.message}). Please contact support — do not re-submit.` };
-  await db.from("audit_log").insert({ actor_id: userId, action: "buddy_application", detail: { city, state: stateName, lga, skills } });
-  await notifyAdmins("New buddy application", `${fullName} (${city}, ${stateName}) applied — review and vet.`, "/admin/buddies");
-  return { error: "", done: true };
+  try {
+    const db = createAdminClient();
+    const { error: profErr } = await db.from("profiles").update({ role: "buddy", phone, full_name: fullName }).eq("id", userId);
+    if (profErr) return { error: `We created your login but couldn't set up your profile. Please contact support and mention this: ${profErr.message}` };
+    const { error: bpErr } = await db.from("buddy_profiles").insert({
+      id: userId, vetting: "under_review", skills,
+      city, date_of_birth: dob, nin, address, state: stateName, lga,
+      coverage_areas: coverage, occupation, experience, availability,
+      education_level: educationLevel || null, course_of_study: courseOfStudy || null,
+      year_of_graduation: yearOfGraduation, school_attended: schoolAttended || null,
+      has_smartphone: hasSmartphone, can_drive: canDrive, has_drivers_license: hasLicense,
+      criminal_record: criminalRecord === "yes", criminal_record_details: criminalDetails || null,
+      consent_background_checks: consentChecks, consent_data_processing: consentData,
+    });
+    if (bpErr) {
+      // Translate the most common database errors into something the applicant can act on.
+      const m = bpErr.message.toLowerCase();
+      if (m.includes("duplicate") && m.includes("nin")) return { error: "That NIN is already registered with us. If this is you, try logging in instead — or contact support." };
+      if (m.includes("duplicate")) return { error: "Some of your details are already on file. Try logging in, or contact support if you're stuck." };
+      return { error: `Your login was created but your application details didn't save. Please contact support (don't re-submit) and mention: ${bpErr.message}` };
+    }
+    // Best-effort extras — never let these block a successful application.
+    try {
+      await db.from("audit_log").insert({ actor_id: userId, action: "buddy_application", detail: { city, state: stateName, lga, skills } });
+      await notifyAdmins("New buddy application", `${fullName} (${city}, ${stateName}) applied — review and vet.`, "/admin/buddies");
+    } catch { /* non-fatal */ }
+    return { error: "", done: true };
+  } catch (e) {
+    // Catch-all: the applicant must NEVER be left staring at a frozen form with
+    // no explanation. Always return an actionable message.
+    const msg = e instanceof Error ? e.message : "an unexpected error";
+    return { error: `Something went wrong saving your application (${msg}). Your login may have been created — please contact support before re-submitting so we can help.` };
+  }
 }
 
 /** Send a password-reset email. Always returns success (don't reveal whether

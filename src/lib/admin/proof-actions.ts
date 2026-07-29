@@ -128,6 +128,61 @@ export async function deleteRequestsBulk(requestIds: string[]): Promise<{ delete
   return { deleted, failed, error: "" };
 }
 
+/** Delete a client and everything they own: all their requests (via the robust
+ *  per-request deleter), their payments, notifications, profile and auth account.
+ *  Financial ledger transactions are detached (preserved), not deleted. */
+export async function deleteClient(clientId: string) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { error: "Not authorised." };
+  if (!clientId) return { error: "Missing client." };
+  if (clientId === p.id) return { error: "You can't delete your own account." };
+  const db = createAdminClient();
+
+  const { data: target } = await db.from("profiles").select("id, role").eq("id", clientId).maybeSingle();
+  if (!target) return { error: "Client not found." };
+  if (target.role === "admin") return { error: "This is an admin account — change the role first before deleting." };
+
+  // 1) Delete every request this client owns, using the robust per-request
+  //    deleter (removes proofs/messages/milestones/quote items/payments/etc.
+  //    and R2 files, in FK-safe order).
+  const { data: reqs } = await db.from("requests").select("id").eq("client_id", clientId);
+  for (const r of (reqs ?? []) as any[]) {
+    try { await deleteRequest(r.id); } catch {}
+  }
+
+  // 2) Clean up anything else that points at this profile and would block delete.
+  try { await db.from("payments").delete().eq("client_id", clientId); } catch {}
+  try { await db.from("notifications").delete().eq("user_id", clientId); } catch {}
+  try { await db.from("support_messages").delete().eq("user_id", clientId); } catch {}
+  // Detach ledger + audit references rather than deleting financial history.
+  try { await db.from("transactions").update({ client_id: null }).eq("client_id", clientId); } catch {}
+
+  // 3) Delete the auth user (cascades to the profile row). Fall back to deleting
+  //    the profile directly if the auth delete fails.
+  const { error: authErr } = await db.auth.admin.deleteUser(clientId);
+  if (authErr) {
+    const { error: pErr } = await db.from("profiles").delete().eq("id", clientId);
+    if (pErr) return { error: `Could not fully delete this client: ${authErr.message}` };
+  }
+
+  await db.from("audit_log").insert({ actor_id: p.id, action: "delete_client", target_id: clientId, detail: {} });
+  revalidatePath("/admin/clients"); revalidatePath("/admin");
+  return { error: "" };
+}
+
+/** Delete several clients at once (for clearing dummy/test accounts). */
+export async function deleteClientsBulk(clientIds: string[]): Promise<{ deleted: number; failed: number; error: string }> {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { deleted: 0, failed: 0, error: "Not authorised." };
+  let deleted = 0, failed = 0;
+  for (const id of clientIds.slice(0, 200)) {
+    const r = await deleteClient(id);
+    if (r.error) failed++; else deleted++;
+  }
+  revalidatePath("/admin/clients");
+  return { deleted, failed, error: "" };
+}
+
 /** Delete a user (client or buddy): removes their auth account, which cascades
  *  to their profile and (for buddies) buddy_profile. Their requests are removed
  *  too. Admin only. Cannot delete yourself or another admin. Irreversible. */

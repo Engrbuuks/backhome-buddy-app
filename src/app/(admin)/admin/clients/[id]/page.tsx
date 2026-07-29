@@ -9,6 +9,7 @@ import { Mail, Phone, Calendar, ArrowLeft } from "lucide-react";
 import ReengagementComposer from "./ReengagementComposer";
 import ClientCurrencyPicker from "./ClientCurrencyPicker";
 import ResetPasswordButton from "./ResetPasswordButton";
+import DeleteClientButton from "./DeleteClientButton";
 import { getClientDisplay } from "@/lib/money/fx";
 
 export const dynamic = "force-dynamic";
@@ -40,6 +41,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           <div className="mt-4 border-t border-bbb-border pt-3">
             <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Account</p>
             <ResetPasswordButton clientId={c.id} hasEmail={Boolean(c.email)} />
+            <DeleteClientButton clientId={c.id} name={c.full_name || c.email || ""} />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-3 lg:col-span-2">
