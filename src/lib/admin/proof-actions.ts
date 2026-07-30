@@ -88,6 +88,16 @@ export async function deleteRequest(requestId: string) {
     try { await db.storage.from("proofs").remove(keys); } catch {}
   }
 
+  // Also remove chat message attachments (stored in the proofs bucket).
+  try {
+    const { data: msgs } = await db.from("request_messages").select("attachment_url").eq("request_id", requestId).not("attachment_url", "is", null);
+    const attKeys = (msgs ?? []).map((m: any) => m.attachment_url).filter(Boolean);
+    if (attKeys.length) {
+      const { r2Configured, deleteObject } = await import("@/lib/storage/r2");
+      if (r2Configured()) { for (const k of attKeys) { try { await deleteObject("proofs", k); } catch {} } }
+    }
+  } catch {}
+
   // 2) Explicitly delete every child that references this request, in an order
   //    that never violates a foreign key. We don't rely solely on ON DELETE
   //    CASCADE, because if any cascade migration wasn't applied the delete would

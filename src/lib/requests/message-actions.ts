@@ -27,7 +27,20 @@ export async function getRequestMessages(requestId: string) {
   if (!allowed) return [];
   const db = createAdminClient();
   const { data } = await db.from("request_messages").select("*").eq("request_id", requestId).order("created_at");
-  const msgs = data ?? [];
+  let msgs = data ?? [];
+
+  // Audience filtering: admins see everything. A client never sees buddy-only
+  // messages; a buddy never sees client-only messages. Legacy rows are 'all'.
+  const isAdmin = p.role === "admin";
+  const isClient = req.client_id === p.id;
+  if (!isAdmin) {
+    msgs = msgs.filter((m: any) => {
+      const aud = m.audience || "all";
+      if (aud === "all") return true;
+      if (isClient) return aud === "client";
+      return aud === "buddy"; // viewer is the buddy
+    });
+  }
 
   // Attach a display first-name for client/buddy senders (staff shown as the team).
   const senderIds = Array.from(new Set(msgs.map((m: any) => m.sender_id).filter(Boolean)));
@@ -36,14 +49,32 @@ export async function getRequestMessages(requestId: string) {
     const { data: profs } = await db.from("profiles").select("id, full_name").in("id", senderIds);
     for (const pr of profs ?? []) names.set((pr as any).id, firstNameOf((pr as any).full_name));
   }
-  return msgs.map((m: any) => ({ ...m, sender_first_name: m.sender === "staff" ? null : (names.get(m.sender_id) || null) }));
+  // Sign any attachment keys (stored in the proofs bucket).
+  const withAtt = msgs.filter((m: any) => m.attachment_url);
+  let signedMap = new Map<string, string>();
+  if (withAtt.length) {
+    const { signProofUrls } = await import("@/lib/storage/sign");
+    const signed = await signProofUrls(withAtt.map((m: any) => ({ id: m.id, file_url: m.attachment_url })) as any[]);
+    signedMap = new Map(signed.map((s: any) => [s.id, s.signedUrl as string]).filter(([, v]) => v) as [string, string][]);
+  }
+  return msgs.map((m: any) => ({
+    ...m,
+    sender_first_name: m.sender === "staff" ? null : (names.get(m.sender_id) || null),
+    attachment_signed: m.attachment_url ? (signedMap.get(m.id) || null) : null,
+  }));
 }
 
-export async function sendRequestMessage(requestId: string, content: string) {
+export async function sendRequestMessage(
+  requestId: string,
+  content: string,
+  audience: "all" | "client" | "buddy" = "all",
+  attachment?: { url: string; kind: "image" | "video" | "file"; name?: string }
+) {
   const p = await getCurrentProfile();
   if (!p) return { error: "Not authenticated." };
   const text = String(content || "").trim();
-  if (text.length < 1) return { error: "Message is empty." };
+  const hasAttachment = Boolean(attachment?.url);
+  if (text.length < 1 && !hasAttachment) return { error: "Message is empty." };
   if (text.length > 4000) return { error: "Message is too long." };
 
   const req = await requestFor(requestId);
@@ -54,24 +85,28 @@ export async function sendRequestMessage(requestId: string, content: string) {
   const isBuddy = req.assigned_buddy_id === p.id;
   if (!isAdmin && !isClient && !isBuddy) return { error: "Not authorised for this request." };
 
+  const aud: "all" | "client" | "buddy" = isAdmin && ["all", "client", "buddy"].includes(audience) ? audience : "all";
+
   const sender = isAdmin ? "staff" : isBuddy ? "buddy" : "client";
   const db = createAdminClient();
   const { error } = await db.from("request_messages").insert({
-    request_id: requestId, sender, sender_id: p.id, content: text,
+    request_id: requestId, sender, sender_id: p.id, content: text, audience: aud,
+    attachment_url: attachment?.url || null,
+    attachment_kind: hasAttachment ? attachment!.kind : null,
+    attachment_name: attachment?.name || null,
   });
   if (error) return { error: error.message };
 
   const { notifyAdmins } = await import("@/lib/notifications/notify");
-  const preview = text.slice(0, 160);
-  // Route notifications so everyone stays in the loop, minus the sender.
+  const previewBase = text || (hasAttachment ? (attachment!.kind === "image" ? "📷 Photo" : attachment!.kind === "video" ? "🎥 Video" : "📎 File") : "");
+  const preview = previewBase.slice(0, 160).replace(/[*_`#>-]/g, "");
   if (isAdmin) {
-    if (req.client_id) await notify(req.client_id, `New message about "${req.title}"`, preview, `/client/requests/${requestId}`);
-    if (req.assigned_buddy_id) await notify(req.assigned_buddy_id, `Message about "${req.title}"`, preview, `/buddy/tasks/${requestId}`);
+    if (aud !== "buddy" && req.client_id) await notify(req.client_id, `New message about "${req.title}"`, preview, `/client/requests/${requestId}`);
+    if (aud !== "client" && req.assigned_buddy_id) await notify(req.assigned_buddy_id, `Message about "${req.title}"`, preview, `/buddy/tasks/${requestId}`);
   } else if (isClient) {
     await notifyAdmins(`Client replied on "${req.title}"`, preview, `/admin/requests/${requestId}`);
     if (req.assigned_buddy_id) await notify(req.assigned_buddy_id, `Client message on "${req.title}"`, preview, `/buddy/tasks/${requestId}`);
   } else if (isBuddy) {
-    // Buddy's enquiry goes to BOTH admin and the client (three-way thread).
     await notifyAdmins(`Buddy enquiry on "${req.title}"`, preview, `/admin/requests/${requestId}`);
     if (req.client_id) await notify(req.client_id, `Your buddy asked about "${req.title}"`, preview, `/client/requests/${requestId}`);
   }
