@@ -179,7 +179,28 @@ export async function acceptCounterOffer(requestId: string) {
     actor_id: profile.id, note: `Admin accepted client's counter-offer — price set to ₦${newPrice.toLocaleString()}`,
   });
   await db.from("audit_log").insert({ actor_id: profile.id, action: "accept_counter_offer", target_id: requestId, detail: { newPrice } });
-  await notify(req.client_id, "Your offer was accepted ✓", `We've accepted your price for "${req.title}". Review and proceed to payment.`, `/client/requests/${requestId}`, "quote_ready");
+
+  // Price agreement is essential — the client must be told. Send a guaranteed
+  // email directly (not gated by any notification toggle), plus the in-app note.
+  const { data: owner } = await db.from("profiles").select("email, full_name").eq("id", req.client_id).maybeSingle();
+  await notify(req.client_id, "Your offer was accepted ✓", `We've accepted your price for "${req.title}". Review and proceed to payment.`, `/client/requests/${requestId}`);
+  if ((owner as any)?.email) {
+    try {
+      const { sendEmailPublic } = await import("@/lib/notifications/notify");
+      const first = ((owner as any).full_name || "").split(" ")[0] || "there";
+      const r = await sendEmailPublic(
+        (owner as any).email,
+        `We accepted your price for "${req.title}"`,
+        `Hi ${first},\n\nGood news — we've accepted your offer of NGN ${newPrice.toLocaleString()} for "${req.title}".\n\nYou can review the details and proceed to payment using the button below. Nothing is charged until you go ahead.`,
+        `/client/requests/${requestId}`
+      );
+      // Record whether Resend accepted the email, so delivery is verifiable later.
+      await db.from("audit_log").insert({
+        actor_id: profile.id, action: "counter_accept_email", target_id: requestId,
+        detail: { to: (owner as any).email, sent: !r?.error, error: r?.error || null },
+      });
+    } catch { /* in-app notice already delivered */ }
+  }
   revalidatePath(`/admin/requests/${requestId}`);
   return { error: "" };
 }

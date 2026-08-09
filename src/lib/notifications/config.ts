@@ -31,7 +31,7 @@ export const NOTIF_DEFS: ReadonlyArray<NotifDef> = [
   { key: "refund_sent", label: "Refund sent", audience: "client", essential: true, group: "Payments", defaultSubject: "Refund sent" },
 
   // Task lifecycle
-  { key: "quote_ready", label: "Quote ready", audience: "client", essential: false, group: "Task updates", defaultSubject: "Your quote is ready" },
+  { key: "quote_ready", label: "Quote ready", audience: "client", essential: true, group: "Task updates", defaultSubject: "Your quote is ready" },
   { key: "buddy_assigned_client", label: "Buddy assigned (to client)", audience: "client", essential: false, group: "Task updates", defaultSubject: "A vetted buddy is now on your request." },
   { key: "task_assigned_buddy", label: "New task assigned (to buddy)", audience: "buddy", essential: false, group: "Task updates", defaultSubject: "New task assigned" },
   { key: "work_started", label: "Work has started", audience: "client", essential: false, group: "Task updates", defaultSubject: "Work has started" },
