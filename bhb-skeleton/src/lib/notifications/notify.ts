@@ -242,11 +242,13 @@ export async function notifyTyped(opts: {
   body: string;
   link?: string;
 }) {
-  const { getNotifSettings, defFor, isEssential } = await import("@/lib/notifications/config");
+  const { getNotifSettings, defFor } = await import("@/lib/notifications/config");
   const settings = await getNotifSettings();
   const def = defFor(opts.typeKey);
   const cfg = settings.types[opts.typeKey] || { enabled: true };
-  const essential = isEssential(opts.typeKey);
+  // Read straight off the catalog entry — no extra import, so this file cannot
+  // break if config.ts is ever out of step.
+  const essential = def?.essential === true;
   const db = createAdminClient();
 
   const subject = (cfg.subject && cfg.subject.trim()) || opts.subject || def?.defaultSubject || "Backhome Buddy";

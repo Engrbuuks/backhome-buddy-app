@@ -2,11 +2,23 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
-import { NOTIF_SETTINGS_KEY, NOTIF_DEFS, getNotifSettings, enforceEssentials, type NotifSettings } from "@/lib/notifications/config";
+import { NOTIF_SETTINGS_KEY, NOTIF_DEFS, getNotifSettings, type NotifSettings } from "@/lib/notifications/config";
 
 async function admin() {
   const p = await getCurrentProfile();
   return p && p.role === "admin" ? p : null;
+}
+
+/** Force every essential type on before saving. The sender ignores the on/off
+ *  switch for essential types, so the stored config must not claim otherwise.
+ *  Local to this file on purpose — a helper used once shouldn't become a new
+ *  cross-file dependency. */
+function enforceEssentials(types: Record<string, { enabled: boolean; subject?: string; body?: string; recipientOverride?: string }>) {
+  const out = { ...types };
+  for (const d of NOTIF_DEFS) {
+    if (d.essential) out[d.key] = { ...(out[d.key] || {}), enabled: true };
+  }
+  return out;
 }
 
 function validEmail(e: string) {

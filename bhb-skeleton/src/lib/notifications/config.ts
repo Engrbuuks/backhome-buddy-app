@@ -98,19 +98,3 @@ export async function getNotifSettings(): Promise<NotifSettings> {
 export function defFor(key: string): NotifDef | undefined {
   return NOTIF_DEFS.find((d) => d.key === key);
 }
-
-/** True when a notification type may never be silenced. Unknown keys are treated
- *  as non-essential (they already default to enabled anyway). */
-export function isEssential(key: string): boolean {
-  return defFor(key)?.essential === true;
-}
-
-/** Force every essential type on. Applied when settings are saved, so the stored
- *  config can never contradict what the sender actually does. */
-export function enforceEssentials(types: Record<string, NotifTypeConfig>): Record<string, NotifTypeConfig> {
-  const out = { ...types };
-  for (const d of NOTIF_DEFS) {
-    if (d.essential) out[d.key] = { ...(out[d.key] || {}), enabled: true };
-  }
-  return out;
-}
