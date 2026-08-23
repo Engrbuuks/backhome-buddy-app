@@ -9,18 +9,6 @@ async function admin() {
   return p && p.role === "admin" ? p : null;
 }
 
-/** Force every essential type on before saving. The sender ignores the on/off
- *  switch for essential types, so the stored config must not claim otherwise.
- *  Local to this file on purpose — a helper used once shouldn't become a new
- *  cross-file dependency. */
-function enforceEssentials(types: Record<string, { enabled: boolean; subject?: string; body?: string; recipientOverride?: string }>) {
-  const out = { ...types };
-  for (const d of NOTIF_DEFS) {
-    if (d.essential) out[d.key] = { ...(out[d.key] || {}), enabled: true };
-  }
-  return out;
-}
-
 function validEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 }
@@ -55,11 +43,8 @@ export async function saveNotifSettings(payload: NotifSettings): Promise<{ error
     }
   }
 
-  // Essential types are never disableable — the sender ignores the switch for
-  // them, so the stored config must say the same thing rather than showing an
-  // "off" that has no effect.
   const clean: NotifSettings = {
-    types: enforceEssentials(payload.types || {}),
+    types: payload.types || {},
     teamEmails,
     fromAddress: payload.fromAddress?.trim() || "",
     replyTo: payload.replyTo?.trim() || "",

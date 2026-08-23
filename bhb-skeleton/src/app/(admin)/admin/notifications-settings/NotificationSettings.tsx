@@ -25,16 +25,12 @@ export default function NotificationSettings({ initialSettings, defs }: { initia
   const setCfg = (k: string, patch: Partial<Cfg>) =>
     setS((prev) => ({ ...prev, types: { ...prev.types, [k]: { ...cfg(k), ...patch } } }));
 
-  // Essential types always send — the server ignores this switch for them — so the
-  // control is locked rather than pretending to work. Wording and recipient can
-  // still be edited; only the on/off is fixed.
   const toggle = (d: Def) => {
-    if (d.essential) {
-      setErr(""); setMsg("");
-      setErr(`“${d.label}” always sends. It's money- or deadline-critical, so it can't be switched off — you can still edit its wording and recipient below.`);
-      return;
+    const current = cfg(d.key).enabled;
+    if (current && d.essential) {
+      if (!confirm(`“${d.label}” is an essential notification (money or onboarding). Turning it off may leave clients or buddies confused or blocked. Are you sure you want to disable it?`)) return;
     }
-    setCfg(d.key, { enabled: !cfg(d.key).enabled });
+    setCfg(d.key, { enabled: !current });
   };
 
   const save = () => start(async () => {
@@ -127,19 +123,16 @@ export default function NotificationSettings({ initialSettings, defs }: { initia
                       <span className="min-w-0">
                         <span className="flex items-center gap-2">
                           <span className="font-bold text-sm">{d.label}</span>
-                          {d.essential && <span title="Money- or deadline-critical — always sends, can't be switched off" className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"><AlertTriangle className="h-2.5 w-2.5" /> Always sends</span>}
+                          {d.essential && <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700"><AlertTriangle className="h-2.5 w-2.5" /> Essential</span>}
                           <span className="rounded bg-bbb-bg px-1.5 py-0.5 text-[10px] font-bold text-bbb-slate capitalize">{d.audience}</span>
                         </span>
                         <span className="block truncate text-xs text-bbb-slate">{c.subject || d.defaultSubject}</span>
                       </span>
                     </button>
-                    {/* toggle — locked ON for essential types (the server always sends those) */}
-                    <button onClick={() => toggle(d)} role="switch"
-                      aria-checked={d.essential ? true : c.enabled}
-                      aria-disabled={d.essential}
-                      title={d.essential ? "Always sends — money- or deadline-critical" : c.enabled ? "On" : "Off"}
-                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${d.essential ? "cursor-not-allowed bg-bbb-strong/60" : c.enabled ? "bg-bbb-strong" : "bg-gray-300"}`}>
-                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${d.essential || c.enabled ? "left-[22px]" : "left-0.5"}`} />
+                    {/* toggle */}
+                    <button onClick={() => toggle(d)} role="switch" aria-checked={c.enabled}
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${c.enabled ? "bg-bbb-strong" : "bg-gray-300"}`}>
+                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${c.enabled ? "left-[22px]" : "left-0.5"}`} />
                     </button>
                   </div>
                   {isOpen && (

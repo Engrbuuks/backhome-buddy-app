@@ -4,47 +4,16 @@ import { redirect } from "next/navigation";
 import type { UserRole } from "@/types/db";
 import { HOME_FOR } from "@/lib/auth/roles-home";
 
-/**
- * Rate limiter for auth endpoints.
- *
- * Two layers:
- *  1. An in-memory Map — free, instant, and catches the common case of one
- *     person retrying on one instance.
- *  2. A shared Postgres counter (`bump_rate_limit`, migration 0037) — the
- *     authority. Without it, "8 per minute" meant "8 per SERVERLESS INSTANCE
- *     per minute", and Vercel spawns instances under exactly the kind of burst
- *     a brute-force attempt produces.
- *
- * FAILS OPEN. If the shared counter is unreachable we fall back to the
- * in-memory result rather than blocking, because a database hiccup must never
- * stop a legitimate person from signing in.
- */
+/** Simple per-instance rate limiter for auth endpoints. Good against casual
+ *  brute force in dev/single-instance; for serverless scale, swap for a
+ *  shared store (e.g. Upstash Redis) at the payments/live step. */
 const attempts = new Map<string, { n: number; t: number }>();
-
-function localRateLimited(key: string, max: number, windowMs: number): boolean {
+function rateLimited(key: string, max = 8, windowMs = 60_000): boolean {
   const now = Date.now();
   const a = attempts.get(key);
   if (!a || now - a.t > windowMs) { attempts.set(key, { n: 1, t: now }); return false; }
   a.n += 1;
   return a.n > max;
-}
-
-async function rateLimited(key: string, max = 8, windowMs = 60_000): Promise<boolean> {
-  const local = localRateLimited(key, max, windowMs);
-  if (local) return true; // already over the line on this instance — no need to ask the DB
-
-  try {
-    const { createAdminClient } = await import("@/lib/supabase/admin");
-    const db = createAdminClient();
-    const { data, error } = await db.rpc("bump_rate_limit", {
-      p_key: key,
-      p_window_seconds: Math.ceil(windowMs / 1000),
-    });
-    if (error) return false;                 // fail open
-    return typeof data === "number" && data > max;
-  } catch {
-    return false;                            // fail open
-  }
 }
 
 
@@ -53,7 +22,7 @@ async function rateLimited(key: string, max = 8, windowMs = 60_000): Promise<boo
 export async function signIn(_prev: unknown, formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "");
-  if (await rateLimited(`signin:${email}`)) return { error: "Too many attempts — wait a minute and try again." };
+  if (rateLimited(`signin:${email}`)) return { error: "Too many attempts — wait a minute and try again." };
   const supabase = createClient();
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -75,7 +44,7 @@ export async function signUpClient(_prev: unknown, formData: FormData) {
   const password = String(formData.get("password") || "");
   const fullName = String(formData.get("full_name") || "").slice(0, 120);
   const phone = String(formData.get("phone") || "").slice(0, 32).trim();
-  if (await rateLimited(`signup:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
+  if (rateLimited(`signup:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Enter a valid email address." };
   if (phone.replace(/\D/g, "").length < 10) return { error: "Enter a valid phone number (WhatsApp preferred)." };
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
@@ -194,7 +163,7 @@ export async function signUpBuddy(_prev: unknown, formData: FormData) {
   const consentData = formData.get("consent_data_processing") === "on";
   const declareTrue = formData.get("declare_true") === "on";
 
-  if (await rateLimited(`apply:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
+  if (rateLimited(`apply:${email}`, 5)) return { error: "Too many attempts — wait a minute and try again." };
   if (!fullName || !email || !phone || !city) return { error: "Fill in your name, email, phone and city." };
   if (password.length < 8) return { error: "Password must be at least 8 characters." };
   if (!dob) return { error: "Enter your date of birth." };

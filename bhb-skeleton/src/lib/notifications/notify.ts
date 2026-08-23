@@ -44,49 +44,6 @@ function emailHtml(title: string, body: string, link?: string) {
   </td></tr></table></body></html>`;
 }
 
-/**
- * Record whether Resend accepted a message, so "the client says they never got
- * it" becomes a checkable fact instead of a guess.
- *
- * Query it with:
- *   select created_at, detail from audit_log
- *   where action = 'email_send' order by created_at desc limit 50;
- *
- * `sent: true`  → we handed it to Resend; if it never arrived, the problem is
- *                 downstream (SPF/DKIM/DMARC, spam filing, a wrong address).
- * `sent: false` → it never left the app; `reason` says why.
- *
- * Volume is kept sane: essential types are always logged, non-essential ones
- * only when the send fails. Logging never throws — it must not be able to break
- * the action that triggered it.
- */
-async function logEmailOutcome(entry: {
-  to: string;
-  subject: string;
-  typeKey?: string;
-  sent: boolean;
-  reason?: string;
-  always?: boolean;
-}) {
-  try {
-    if (!entry.always && entry.sent) return; // successes are only logged for essential types
-    const db = createAdminClient();
-    await db.from("audit_log").insert({
-      actor_id: null,
-      action: "email_send",
-      detail: {
-        to: entry.to,
-        subject: entry.subject,
-        type_key: entry.typeKey ?? null,
-        sent: entry.sent,
-        reason: entry.reason ?? null,
-      },
-    });
-  } catch (e) {
-    console.error("Email outcome logging failed:", e);
-  }
-}
-
 export async function sendBrandedEmail(to: string, subject: string, body: string, link?: string, replyTo?: string) {
   const key = process.env.RESEND_API_KEY;
   if (!key || !to) return; // email channel not configured — in-app only
@@ -106,25 +63,16 @@ export async function sendBrandedEmail(to: string, subject: string, body: string
 
 async function sendEmail(to: string, subject: string, body: string, link?: string) {
   const key = process.env.RESEND_API_KEY;
-  if (!key || !to) {
-    // Email channel not configured, or no address on file — in-app only.
-    await logEmailOutcome({ to: to || "(none)", subject, sent: false, reason: key ? "no recipient email on file" : "RESEND_API_KEY not set" });
-    return;
-  }
+  if (!key || !to) return; // email channel not configured — in-app only
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(subject, body, link) }),
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("Email send failed:", res.status, text);
-      await logEmailOutcome({ to, subject, sent: false, reason: `Resend ${res.status}: ${text.slice(0, 200)}` });
-    }
+    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
   } catch (e) {
     console.error("Email send error:", e);
-    await logEmailOutcome({ to, subject, sent: false, reason: e instanceof Error ? e.message : "send error" });
   }
 }
 
@@ -246,9 +194,6 @@ export async function notifyTyped(opts: {
   const settings = await getNotifSettings();
   const def = defFor(opts.typeKey);
   const cfg = settings.types[opts.typeKey] || { enabled: true };
-  // Read straight off the catalog entry — no extra import, so this file cannot
-  // break if config.ts is ever out of step.
-  const essential = def?.essential === true;
   const db = createAdminClient();
 
   const subject = (cfg.subject && cfg.subject.trim()) || opts.subject || def?.defaultSubject || "Backhome Buddy";
@@ -259,12 +204,8 @@ export async function notifyTyped(opts: {
     await db.from("notifications").insert({ user_id: opts.userId, title: subject, body, link: opts.link ?? null });
   }
 
-  // Email is switchable — EXCEPT for essential types. Missing a payment, payout,
-  // refund, quote, assignment, proof turnaround, dispute outcome or onboarding
-  // blocker costs real money or strands someone, so those always send regardless
-  // of the admin toggle. A stale `enabled: false` in saved settings can no longer
-  // silence them.
-  if (!cfg.enabled && !essential) return;
+  // Email is optional and switchable.
+  if (!cfg.enabled) return;
 
   // Resolve recipient(s).
   let recipients: string[] = [];
@@ -276,31 +217,19 @@ export async function notifyTyped(opts: {
     const { data: p } = await db.from("profiles").select("email").eq("id", opts.userId).maybeSingle();
     if (p?.email) recipients = [p.email];
   }
-  if (recipients.length === 0) {
-    await logEmailOutcome({
-      to: "(none)", subject, typeKey: opts.typeKey, sent: false,
-      reason: def?.audience === "team" ? "no team emails configured" : "no recipient email on file",
-      always: essential,
-    });
-    return;
-  }
+  if (recipients.length === 0) return;
 
   const from = (settings.fromAddress && settings.fromAddress.trim()) || undefined;
   const replyTo = (settings.replyTo && settings.replyTo.trim()) || undefined;
   for (const to of recipients) {
-    const r = await sendConfiguredEmail(to, subject, body, opts.link, from, replyTo);
-    await logEmailOutcome({ to, subject, typeKey: opts.typeKey, sent: r.sent, reason: r.reason, always: essential });
+    await sendConfiguredEmail(to, subject, body, opts.link, from, replyTo);
   }
 }
 
-/** Like sendBrandedEmail but with optional from/reply-to overrides. Reports the
- *  outcome so the caller can record it. Never throws. */
-async function sendConfiguredEmail(
-  to: string, subject: string, body: string, link?: string, fromOverride?: string, replyTo?: string
-): Promise<{ sent: boolean; reason?: string }> {
+/** Like sendBrandedEmail but with optional from/reply-to overrides. */
+async function sendConfiguredEmail(to: string, subject: string, body: string, link?: string, fromOverride?: string, replyTo?: string) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) return { sent: false, reason: "RESEND_API_KEY not set" };
-  if (!to) return { sent: false, reason: "no recipient email on file" };
+  if (!key || !to) return;
   try {
     const payload: any = { from: fromOverride || FROM, to: [to], subject, html: emailHtml(subject, body, link) };
     if (replyTo) payload.reply_to = replyTo;
@@ -309,14 +238,8 @@ async function sendConfiguredEmail(
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error("Email send failed:", res.status, text);
-      return { sent: false, reason: `Resend ${res.status}: ${text.slice(0, 200)}` };
-    }
-    return { sent: true };
+    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
   } catch (e) {
     console.error("Email send error:", e);
-    return { sent: false, reason: e instanceof Error ? e.message : "send error" };
   }
 }
