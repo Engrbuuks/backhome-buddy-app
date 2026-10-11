@@ -38,6 +38,27 @@ export async function savePayoutDetails(_prev: unknown, formData: FormData) {
   return { error: "", saved: true };
 }
 
+/**
+ * The buddy's own on/off switch for new work.
+ *
+ * Their call, not an admin's: a buddy who is travelling, unwell or already busy
+ * turns it off and nothing is offered to them until they turn it back on. This
+ * is what stops the coming offer layer pushing tasks at people who cannot take
+ * them, which is the quiet failure mode of automated assignment.
+ *
+ * It does not touch work already assigned, and it is not a vetting state.
+ */
+export async function setAcceptingWork(accepting: boolean) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "buddy") return { error: "Not authorized." };
+  const supabase = createClient();
+  const { error } = await supabase.from("buddy_profiles").upsert({ id: p.id, accepting_work: accepting });
+  if (error) return { error: error.message };
+  revalidatePath("/buddy/settings");
+  revalidatePath("/buddy/dashboard");
+  return { error: "", saved: true };
+}
+
 export async function updateBuddySkills(_prev: unknown, formData: FormData) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "buddy") return { error: "Not authorized." };

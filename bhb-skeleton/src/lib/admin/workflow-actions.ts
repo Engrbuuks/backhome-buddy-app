@@ -37,6 +37,17 @@ export async function recordManualPayment(requestId: string) {
   await transition(db, req, "paid", p.id, "Payment received (bank transfer) — funds held");
   await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_payment", target_id: req.id, detail: { amount_ngn: req.client_price_ngn } });
   await notify(req.client_id, "Payment received", "Your payment is confirmed and held securely. We are assigning your buddy.", `/client/requests/${req.id}`, "payment_received");
+
+  // Payment is the trigger for the offer cascade. Non-fatal on purpose: if no
+  // buddy can be offered the task, the payment is still recorded and the
+  // request sits in the admin queue rather than the whole action failing.
+  try {
+    const { startOffering } = await import("@/lib/offers/actions");
+    await startOffering(req.id);
+  } catch (e) {
+    console.error("startOffering after payment failed:", e);
+  }
+
   revalidatePath(`/admin/requests/${req.id}`); revalidatePath("/admin/requests");
   return { error: "" };
 }
@@ -59,6 +70,16 @@ export async function assignBuddy(requestId: string, buddyId: string) {
   if (!buddy || buddy.vetting !== "approved") return { error: "Buddy is not approved." };
   await db.from("requests").update({ assigned_buddy_id: buddyId }).eq("id", req.id);
   await transition(db, req, "assigned", p.id, "Buddy assigned");
+
+  // An admin assigning by hand overrides the cascade. Whatever offer was live
+  // is no longer meaningful, so retire it rather than leaving a buddy staring
+  // at an offer for a task that is already gone.
+  try {
+    const { supersedePendingOffers } = await import("@/lib/offers/engine");
+    await supersedePendingOffers(req.id);
+  } catch (e) {
+    console.error("supersedePendingOffers failed:", e);
+  }
   // Copy the service type's milestone template onto this request (once).
   try {
     const { seedRequestMilestones } = await import("@/lib/requests/milestone-actions");

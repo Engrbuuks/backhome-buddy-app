@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
-import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
+import { VETTING_CHECKS, isKnownCheck, missingRequired, tierRank, type TrustTier } from "@/lib/admin/vetting-checks";
 
 async function admin() {
   const p = await getCurrentProfile();
@@ -45,9 +45,62 @@ export async function listBuddies(page = 1, pageSize = 20) {
   return { rows: buddies, total: count ?? buddies.length };
 }
 
+/**
+ * Operator overrides for which checks block approval, stored in app_settings so
+ * a check can be relaxed without a deploy. Shape: { "<check_key>": false }.
+ * Local to this file on purpose — used once, so it does not become a new cross
+ * file dependency. Never throws; a missing or malformed row means no overrides.
+ */
+async function vettingOverrides(db: any): Promise<Record<string, boolean>> {
+  try {
+    const { data } = await db.from("app_settings").select("value").eq("key", "vetting_check_overrides").maybeSingle();
+    const v = data?.value;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The current override map, for rendering the admin checklist. */
+export async function getVettingOverrides(): Promise<Record<string, boolean>> {
+  if (!(await admin())) return {};
+  return vettingOverrides(createAdminClient());
+}
+
+/**
+ * Turn a single vetting check into a blocker, or stop it blocking, without a
+ * deploy. This is what makes the checklist a policy you own rather than a
+ * constant someone has to edit in code.
+ *
+ * `required = null` clears the override and restores the built-in default.
+ * The NDA is excluded: it is set by the buddy signing in their portal, so
+ * relaxing it would be meaningless.
+ */
+export async function setVettingCheckRequirement(key: string, required: boolean | null) {
+  const p = await admin(); if (!p) return { error: "Not authorized." };
+  if (!isKnownCheck(key)) return { error: "Unknown check." };
+  if (key === "nda_signed") return { error: "The NDA requirement can't be relaxed — it is set when the buddy signs in their portal." };
+
+  const db = createAdminClient();
+  const current = await vettingOverrides(db);
+  const next = { ...current };
+  if (required === null) delete next[key]; else next[key] = required;
+
+  const { error } = await db
+    .from("app_settings")
+    .upsert({ key: "vetting_check_overrides", value: next, updated_at: new Date().toISOString() });
+  if (error) return { error: error.message };
+
+  await db.from("audit_log").insert({
+    actor_id: p.id, action: "vetting_requirement", detail: { key, required },
+  });
+  revalidatePath("/admin/buddies");
+  return { error: "" };
+}
+
 export async function updateVettingCheck(buddyId: string, key: string, value: boolean) {
   const p = await admin(); if (!p) return { error: "Not authorized." };
-  if (!VETTING_CHECKS.some(([k]) => k === key)) return { error: "Unknown check." };
+  if (!isKnownCheck(key)) return { error: "Unknown check." };
   if (key === "nda_signed") return { error: "The NDA check is set automatically when the buddy signs it in their portal — it can't be ticked manually." };
   const db = createAdminClient();
   const { data: row } = await db.from("buddy_profiles").select("vetting_checks").eq("id", buddyId).maybeSingle();
@@ -55,6 +108,47 @@ export async function updateVettingCheck(buddyId: string, key: string, value: bo
   const { error } = await db.from("buddy_profiles").update({ vetting_checks: checks }).eq("id", buddyId);
   if (error) return { error: error.message };
   await db.from("audit_log").insert({ actor_id: p.id, action: "vetting_check", target_id: buddyId, detail: { key, value } });
+  revalidatePath("/admin/buddies");
+  return { error: "" };
+}
+
+/**
+ * Raise or lower what level of exposure a buddy is cleared for.
+ *
+ * Raising the tier re-runs the approval gate at the NEW level, so promoting
+ * someone to high value or safeguarding work demands the stricter checks at
+ * that moment rather than at sign up. Lowering is always allowed — it only ever
+ * reduces what they can be offered.
+ */
+export async function setBuddyClearanceTier(buddyId: string, tier: TrustTier) {
+  const p = await admin(); if (!p) return { error: "Not authorized." };
+  const db = createAdminClient();
+
+  const { data: row } = await db
+    .from("buddy_profiles")
+    .select("vetting, vetting_checks, clearance_tier, tasks_completed")
+    .eq("id", buddyId)
+    .maybeSingle();
+  if (!row) return { error: "Buddy not found." };
+
+  const current = ((row as any).clearance_tier ?? "standard") as TrustTier;
+  const raising = tierRank(tier) > tierRank(current);
+
+  if (raising) {
+    if (row.vetting !== "approved") return { error: "Approve the buddy before raising their clearance." };
+    const checks = (row.vetting_checks ?? {}) as Record<string, boolean>;
+    const missing = missingRequired(checks, tier, await vettingOverrides(db));
+    if (missing.length) {
+      return { error: `Cannot clear for ${tier.replace("_", " ")} yet — outstanding: ${missing.join("; ")}.` };
+    }
+  }
+
+  const { error } = await db.from("buddy_profiles").update({ clearance_tier: tier }).eq("id", buddyId);
+  if (error) return { error: error.message };
+  await db.from("audit_log").insert({
+    actor_id: p.id, action: "set_clearance_tier", target_id: buddyId,
+    detail: { from: current, to: tier },
+  });
   revalidatePath("/admin/buddies");
   return { error: "" };
 }
@@ -73,9 +167,19 @@ export async function setBuddyVetting(buddyId: string, vetting: "approved" | "re
   const db = createAdminClient();
   if (vetting === "approved") {
     // Approval is the RESULT of completed checks, not a shortcut around them.
-    const { data: row } = await db.from("buddy_profiles").select("vetting_checks").eq("id", buddyId).maybeSingle();
+    //
+    // Only the checks that BLOCK at this buddy's clearance tier are enforced.
+    // Optional checks (the PCC, for one) never block, and tier gated checks
+    // bite only when the buddy is cleared for that level of exposure. Verify at
+    // the point of risk, not the point of entry.
+    const { data: row } = await db
+      .from("buddy_profiles")
+      .select("vetting_checks, clearance_tier")
+      .eq("id", buddyId)
+      .maybeSingle();
     const checks = (row?.vetting_checks ?? {}) as Record<string, boolean>;
-    const missing = VETTING_CHECKS.filter(([k]) => !checks[k]).map(([, label]) => label);
+    const tier = ((row as any)?.clearance_tier ?? "standard") as TrustTier;
+    const missing = missingRequired(checks, tier, await vettingOverrides(db));
     if (missing.length) return { error: `Cannot approve yet — outstanding checks: ${missing.join("; ")}.` };
   }
   const { error } = await db.from("buddy_profiles").update({ vetting }).eq("id", buddyId);

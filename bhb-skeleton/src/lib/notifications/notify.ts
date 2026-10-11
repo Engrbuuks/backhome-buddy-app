@@ -55,11 +55,18 @@ export async function sendBrandedEmail(to: string, subject: string, body: string
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("Email send failed:", res.status, text);
+      return { sent: false, reason: `Resend ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { sent: true };
   } catch (e) {
     console.error("Email send error:", e);
+    return { sent: false, reason: e instanceof Error ? e.message : "send error" };
   }
 }
+
 
 async function sendEmail(to: string, subject: string, body: string, link?: string) {
   const key = process.env.RESEND_API_KEY;
@@ -70,11 +77,18 @@ async function sendEmail(to: string, subject: string, body: string, link?: strin
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify({ from: FROM, to: [to], subject, html: emailHtml(subject, body, link) }),
     });
-    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("Email send failed:", res.status, text);
+      return { sent: false, reason: `Resend ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { sent: true };
   } catch (e) {
     console.error("Email send error:", e);
+    return { sent: false, reason: e instanceof Error ? e.message : "send error" };
   }
 }
+
 
 /** Public email send that reports success/error (used by admin re-engagement). */
 export async function sendEmailPublic(to: string, subject: string, body: string, link?: string): Promise<{ error?: string }> {
@@ -194,6 +208,7 @@ export async function notifyTyped(opts: {
   const settings = await getNotifSettings();
   const def = defFor(opts.typeKey);
   const cfg = settings.types[opts.typeKey] || { enabled: true };
+  const essential = def?.essential === true;
   const db = createAdminClient();
 
   const subject = (cfg.subject && cfg.subject.trim()) || opts.subject || def?.defaultSubject || "Backhome Buddy";
@@ -204,8 +219,11 @@ export async function notifyTyped(opts: {
     await db.from("notifications").insert({ user_id: opts.userId, title: subject, body, link: opts.link ?? null });
   }
 
-  // Email is optional and switchable.
-  if (!cfg.enabled) return;
+  // Switchable — EXCEPT for essential types. A stale "off" must not be able to
+  // silence a payment, payout, quote or task offer. This is the same class of
+  // fault as the missing negotiation email: the message never left, and nobody
+  // could tell afterwards whether it had.
+  if (!cfg.enabled && !essential) return;
 
   // Resolve recipient(s).
   let recipients: string[] = [];
@@ -217,19 +235,57 @@ export async function notifyTyped(opts: {
     const { data: p } = await db.from("profiles").select("email").eq("id", opts.userId).maybeSingle();
     if (p?.email) recipients = [p.email];
   }
-  if (recipients.length === 0) return;
+  if (recipients.length === 0) {
+    await recordEmailOutcome(db, opts.userId, opts.typeKey, "(none)", false,
+      def?.audience === "team" ? "no team emails configured" : "no recipient email on file", essential);
+    return;
+  }
 
   const from = (settings.fromAddress && settings.fromAddress.trim()) || undefined;
   const replyTo = (settings.replyTo && settings.replyTo.trim()) || undefined;
   for (const to of recipients) {
-    await sendConfiguredEmail(to, subject, body, opts.link, from, replyTo);
+    const ok = await sendConfiguredEmail(to, subject, body, opts.link, from, replyTo);
+    await recordEmailOutcome(db, opts.userId, opts.typeKey, to, ok.sent, ok.reason, essential);
   }
 }
 
 /** Like sendBrandedEmail but with optional from/reply-to overrides. */
-async function sendConfiguredEmail(to: string, subject: string, body: string, link?: string, fromOverride?: string, replyTo?: string) {
+/**
+ * Record whether the provider accepted the message.
+ *
+ * This is what turns "the buddy says he never got it" into a checkable fact:
+ *   select * from notification_deliveries order by created_at desc limit 50;
+ * accepted = true means it left us, so the problem is downstream (DNS, spam,
+ * wrong address). accepted = false means it never left, and reason says why.
+ *
+ * Essential types are always recorded; everything else only on failure, to
+ * keep the volume sane. Never throws.
+ */
+async function recordEmailOutcome(
+  db: any, userId: string | undefined, typeKey: string, to: string,
+  sent: boolean, reason: string | undefined, always: boolean,
+) {
+  try {
+    if (!always && sent) return;
+    await db.from("notification_deliveries").insert({
+      user_id: userId ?? null,
+      channel: "email",
+      provider: "resend",
+      type_key: typeKey,
+      accepted: sent,
+      reason: reason ? `${to} — ${reason}` : to,
+    });
+  } catch (e) {
+    console.error("delivery logging failed:", e);
+  }
+}
+
+async function sendConfiguredEmail(
+  to: string, subject: string, body: string, link?: string, fromOverride?: string, replyTo?: string,
+): Promise<{ sent: boolean; reason?: string }> {
   const key = process.env.RESEND_API_KEY;
-  if (!key || !to) return;
+  if (!key) return { sent: false, reason: "RESEND_API_KEY not set" };
+  if (!to) return { sent: false, reason: "no recipient email on file" };
   try {
     const payload: any = { from: fromOverride || FROM, to: [to], subject, html: emailHtml(subject, body, link) };
     if (replyTo) payload.reply_to = replyTo;
@@ -238,8 +294,15 @@ async function sendConfiguredEmail(to: string, subject: string, body: string, li
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) console.error("Email send failed:", res.status, await res.text().catch(() => ""));
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("Email send failed:", res.status, text);
+      return { sent: false, reason: `Resend ${res.status}: ${text.slice(0, 200)}` };
+    }
+    return { sent: true };
   } catch (e) {
     console.error("Email send error:", e);
+    return { sent: false, reason: e instanceof Error ? e.message : "send error" };
   }
 }
+

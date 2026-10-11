@@ -1,16 +1,16 @@
 "use client";
-import React, { useState, useTransition, useMemo } from "react";
+import React, { useState, useTransition, useMemo, useEffect } from "react";
 import { AdminShell, PageHeader } from "@/components/AdminShell";
 import CompetencyEditor from "@/components/CompetencyEditor";
 import InterviewLauncher from "@/components/InterviewLauncher";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
-import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction } from "@/lib/admin/ops-actions";
+import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction, setBuddyClearanceTier, setVettingCheckRequirement, getVettingOverrides } from "@/lib/admin/ops-actions";
 import { DeleteButton } from "@/components/DeleteButton";
 import { deleteUser } from "@/lib/admin/proof-actions";
 import { aiScreenBuddy } from "@/lib/ai/assist-actions";
 import { BuddyFilterBar, applyBuddyFilters, EMPTY_BUDDY_FILTER, type BuddyFilterValue } from "./BuddyFilters";
-import { VETTING_CHECKS } from "@/lib/admin/vetting-checks";
+import { VETTING_CHECK_DEFS, requiredChecksFor, missingRequired, type TrustTier } from "@/lib/admin/vetting-checks";
 import { REQUESTABLE_ITEMS } from "@/lib/admin/request-documents";
 import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
@@ -47,8 +47,18 @@ function DocLink({ label, url }: { label: string; url?: string }) {
 
 function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: () => Promise<{ error: string }>) => void }) {
   const checks = (b.vetting_checks ?? {}) as Record<string, boolean>;
-  const doneCount = VETTING_CHECKS.filter(([k]) => checks[k]).length;
-  const allDone = doneCount === VETTING_CHECKS.length;
+  // Count against the checks that BLOCK approval at this buddy's clearance
+  // tier, not against every check that exists. Optional items (the PCC) and
+  // higher-tier items are shown but never hold approval back.
+  const tier = ((b.clearance_tier ?? "standard") as TrustTier);
+  // Operator overrides decide which checks block. Loaded here rather than
+  // threaded through the page, so this panel stays self contained.
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  useEffect(() => { getVettingOverrides().then(setOverrides).catch(() => {}); }, []);
+  const blocking = requiredChecksFor(tier, overrides);
+  const doneCount = blocking.filter((d) => checks[d.key]).length;
+  const allDone = missingRequired(checks, tier, overrides).length === 0;
+  const blocksNow = (key: string) => blocking.some((d) => d.key === key);
   const [notes, setNotes] = useState(b.vetting_notes ?? "");
   const [screening, setScreening] = useState(false);
   const [reqItems, setReqItems] = useState<string[]>([]);
@@ -132,10 +142,10 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
         <div className="rounded-2xl bg-bbb-bg p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting checklist</p>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${allDone ? "bg-green-100 text-green-700" : "bg-white text-bbb-slate"}`}>{doneCount}/{VETTING_CHECKS.length}</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${allDone ? "bg-green-100 text-green-700" : "bg-white text-bbb-slate"}`}>{doneCount}/{blocking.length} required</span>
           </div>
           <div className="space-y-2">
-            {VETTING_CHECKS.map(([key, label]) => (
+            {VETTING_CHECK_DEFS.map(({ key, label, required, minTier, hint }) => (
               key === "nda_signed" ? (
                 <div key={key} className="flex items-start gap-2.5 text-sm leading-5">
                   <input type="checkbox" checked={Boolean(b.nda_signed_at)} disabled readOnly className="mt-0.5 h-4 w-4 rounded border-bbb-border accent-[#079516]" />
@@ -160,13 +170,65 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
                   onChange={(e) => run(() => updateVettingCheck(b.id, key, e.target.checked))}
                   className="mt-0.5 h-4 w-4 rounded border-bbb-border accent-[#079516]"
                 />
-                <span className={checks[key] ? "text-bbb-charcoal" : "text-bbb-slate"}>{label}</span>
+                <span className={checks[key] ? "text-bbb-charcoal" : "text-bbb-slate"}>
+                  {label}
+                  {blocksNow(key)
+                    ? <em className="ml-1.5 not-italic text-xs font-bold text-bbb-strong">blocks approval</em>
+                    : <em className="ml-1.5 not-italic text-xs font-bold text-bbb-slate">
+                        {required && minTier && minTier !== "standard"
+                          ? `required from ${minTier.replace("_", " ")}`
+                          : "does not block"}
+                      </em>}
+                  {key !== "nda_signed" && (!minTier || minTier === "standard") && (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => run(async () => {
+                        const r = await setVettingCheckRequirement(key, !blocksNow(key));
+                        if (!r.error) setOverrides(await getVettingOverrides());
+                        return r;
+                      })}
+                      className="ml-2 text-xs font-bold text-bbb-slate underline hover:text-bbb-strong disabled:opacity-50"
+                    >
+                      {blocksNow(key) ? "make optional" : "make required"}
+                    </button>
+                  )}
+                  {hint && <span className="mt-0.5 block text-xs font-normal text-bbb-slate">{hint}</span>}
+                </span>
               </label>
               )
             ))}
           </div>
           {!allDone && b.vetting !== "approved" && (
-            <p className="mt-3 rounded-lg bg-white p-2 text-xs text-bbb-slate">Approval unlocks when all checks are ticked.</p>
+            <p className="mt-3 rounded-lg bg-white p-2 text-xs text-bbb-slate">Approval unlocks when the required checks are ticked. Optional items and higher-tier items never block it.</p>
+          )}
+          {b.vetting === "approved" && (
+            <div className="mt-3 rounded-lg bg-white p-3">
+              <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Cleared for</p>
+              <p className="mt-1 text-xs text-bbb-slate">
+                What level of exposure this buddy may be offered. Raising it demands the stricter checks at that moment, which is the point: verify at the point of risk, not at sign up.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(["standard", "high_value", "safeguarding"] as TrustTier[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    disabled={pending}
+                    onClick={() => run(() => setBuddyClearanceTier(b.id, t))}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-50 ${
+                      tier === t
+                        ? "border-bbb-strong bg-bbb-strong text-white"
+                        : "border-bbb-border bg-white text-bbb-slate hover:border-bbb-strong"
+                    }`}
+                  >
+                    {t === "standard" ? "Standard" : t === "high_value" ? "High value" : "Safeguarding"}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-bbb-slate">
+                <strong>High value</strong> covers large sums and irreversible decisions. <strong>Safeguarding</strong> covers contact with a vulnerable person.
+              </p>
+            </div>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -277,7 +339,8 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
           <div className="space-y-3">
           {filtered.map((b: any) => {
             const checks = (b.vetting_checks ?? {}) as Record<string, boolean>;
-            const doneCount = VETTING_CHECKS.filter(([k]) => checks[k]).length;
+            const rowBlocking = requiredChecksFor(((b.clearance_tier ?? "standard") as TrustTier));
+            const doneCount = rowBlocking.filter((d) => checks[d.key]).length;
             const isOpen = open === b.id;
             return (
               <article key={b.id} className="rounded-2xl border border-bbb-border bg-white p-4 shadow-soft">
@@ -286,7 +349,7 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
                     {isOpen ? <ChevronUp className="h-4 w-4 shrink-0 text-bbb-slate" /> : <ChevronDown className="h-4 w-4 shrink-0 text-bbb-slate" />}
                     <span className="min-w-0">
                       <span className="block font-semibold">{b.profiles?.full_name ?? b.profiles?.email}</span>
-                      <span className="block text-xs text-bbb-slate">{b.profiles?.email} · {b.profiles?.phone ?? "—"} · {[b.city, b.state].filter(Boolean).join(", ") || "location —"} · checks {doneCount}/{VETTING_CHECKS.length}</span>
+                      <span className="block text-xs text-bbb-slate">{b.profiles?.email} · {b.profiles?.phone ?? "—"} · {[b.city, b.state].filter(Boolean).join(", ") || "location —"} · checks {doneCount}/{rowBlocking.length}</span>
                     </span>
                   </button>
                   <div className="flex items-center gap-2">

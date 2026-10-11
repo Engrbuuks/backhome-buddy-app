@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { listMyTasks } from "@/lib/buddy/actions";
+import { myPendingOffer } from "@/lib/offers/actions";
+import OfferCard from "@/components/OfferCard";
+import PushSetup from "@/components/PushSetup";
 import { getMyProfileSummary } from "@/lib/buddy/vetting-actions";
 import { PassportPhotoUploader } from "@/components/PassportPhotoUploader";
 import { StatusPill } from "@/components/StatusPill";
@@ -11,11 +14,15 @@ function initials(name?: string) {
 }
 
 export default async function BuddyDashboard() {
-  const [tasks, profile] = await Promise.all([listMyTasks(), getMyProfileSummary()]);
+  const [tasks, profile, offer] = await Promise.all([listMyTasks(), getMyProfileSummary(), myPendingOffer()]);
   const guarantors = Array.isArray(profile?.guarantors) ? profile!.guarantors : [];
   const nok = profile?.next_of_kin && typeof profile.next_of_kin === "object" ? profile.next_of_kin : null;
   return (
     <div>
+      {/* A live offer is time boxed, so it goes above everything else. */}
+      {offer && <OfferCard offer={offer} />}
+      {/* Then the thing that makes sure they saw it at all. */}
+      <PushSetup />
       {profile && (
         <div className="mb-6 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
           <div className="flex items-center gap-4">

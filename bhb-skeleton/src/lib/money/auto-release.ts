@@ -29,7 +29,13 @@ export async function runAutoRelease(): Promise<{ released: number }> {
     await db.from("request_timeline").insert({ request_id: req.id, from_status: "proof_approved", to_status: "completed", note: `Auto-confirmed after ${days} days with no objection` });
     await db.from("audit_log").insert({ action: "auto_release", target_id: req.id, detail: { days } });
     await notify(req.client_id, "Completion auto-confirmed", `"${req.title}" was auto-confirmed after ${days} days. Raise an issue if something is wrong.`, `/client/requests/${req.id}`);
-    if (req.assigned_buddy_id) await notify(req.assigned_buddy_id, "Client confirmation complete", "Your payout is now eligible for release.", `/buddy/tasks/${req.id}`);
+    if (req.assigned_buddy_id) {
+      // Same counter as the manual confirmation path, so auto-confirmed work
+      // still builds the buddy's record. Non fatal.
+      try { await db.rpc("bump_buddy_completed", { p_buddy: req.assigned_buddy_id }); }
+      catch (e) { console.error("bump_buddy_completed failed:", e); }
+      await notify(req.assigned_buddy_id, "Client confirmation complete", "Your payout is now eligible for release.", `/buddy/tasks/${req.id}`);
+    }
     await notifyAdmins("Payout eligible (auto-release)", `"${req.title}" auto-confirmed — release the payout.`, "/admin/payouts");
     released++;
   }
