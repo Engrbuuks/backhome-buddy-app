@@ -66,3 +66,24 @@ export async function sendTestNotification(to: string): Promise<{ error: string 
   await sendBrandedEmail(to, "Test notification — Backhome Buddy", "This is a test of your notification settings. If you received this, your email delivery is working.", undefined, settings.replyTo || undefined);
   return { error: "" };
 }
+
+/**
+ * Recent send outcomes, so "they say they never got it" becomes checkable.
+ *
+ * `accepted` means the provider took the message, NOT that it reached the
+ * handset. A run of accepted sends that nobody received points at DNS or spam
+ * filtering; a run of rejected ones points at configuration.
+ *
+ * Degrades quietly when migration 0040 has not been run.
+ */
+export async function listRecentDeliveries(limit = 40) {
+  if (!(await admin())) return { ready: false, rows: [] as any[] };
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("notification_deliveries")
+    .select("id, channel, provider, type_key, accepted, reason, created_at")
+    .order("created_at", { ascending: false })
+    .limit(Math.min(200, Math.max(1, limit)));
+  if (error) return { ready: false, rows: [] as any[] };
+  return { ready: true, rows: data ?? [] };
+}

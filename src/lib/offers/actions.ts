@@ -140,3 +140,66 @@ export async function listOffersForRequest(requestId: string) {
     decline_label: o.decline_reason ? declineLabel(o.decline_reason) : null,
   }));
 }
+
+/**
+ * Everything the Assignment screen needs about offers, in one call.
+ *
+ * Resilient to migration 0039 not having been run: rather than throwing and
+ * blanking the page, it reports that the table is missing so the screen can
+ * say so plainly.
+ */
+export async function listOfferActivity() {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") {
+    return { ready: false, mode: "advisory" as const, live: [], recent: [], declineCounts: [] };
+  }
+  const db = createAdminClient();
+
+  const { getOfferMode } = await import("@/lib/offers/engine");
+  const mode = await getOfferMode(db);
+
+  const sel = "id, request_id, buddy_id, status, offered_at, expires_at, responded_at, decline_reason, decline_note, round, score, requests(title, recipient_address), profiles!task_offers_buddy_id_fkey(full_name)";
+
+  const { data: live, error } = await db
+    .from("task_offers").select(sel)
+    .eq("status", "pending")
+    .order("offered_at", { ascending: false })
+    .limit(50);
+
+  // A missing table means migration 0039 has not been run.
+  if (error) return { ready: false, mode, live: [], recent: [], declineCounts: [] };
+
+  const { data: recent } = await db
+    .from("task_offers").select(sel)
+    .neq("status", "pending")
+    .order("offered_at", { ascending: false })
+    .limit(40);
+
+  // The pricing signal: which reasons are buddies giving, and how often.
+  const { data: declines } = await db
+    .from("task_offers").select("decline_reason")
+    .eq("status", "declined")
+    .limit(500);
+  const tally = new Map<string, number>();
+  for (const d of declines ?? []) {
+    const k = (d as any).decline_reason as string;
+    if (k) tally.set(k, (tally.get(k) ?? 0) + 1);
+  }
+
+  const shape = (rows: any[]) => (rows ?? []).map((o: any) => ({
+    ...o,
+    buddy_name: (Array.isArray(o.profiles) ? o.profiles[0] : o.profiles)?.full_name ?? "Buddy",
+    title: (Array.isArray(o.requests) ? o.requests[0] : o.requests)?.title ?? "Task",
+    decline_label: o.decline_reason ? declineLabel(o.decline_reason) : null,
+  }));
+
+  return {
+    ready: true,
+    mode,
+    live: shape(live ?? []),
+    recent: shape(recent ?? []),
+    declineCounts: Array.from(tally.entries())
+      .map(([key, count]) => ({ key, label: declineLabel(key), count }))
+      .sort((a, b) => b.count - a.count),
+  };
+}

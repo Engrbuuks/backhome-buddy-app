@@ -16,7 +16,7 @@ import { NotificationStrip } from "@/components/NotificationStrip";
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/requests", label: "Requests Queue", icon: Inbox },
-  { href: "/admin/assignment", label: "Assignment", icon: UserCheck },
+  { href: "/admin/assignment", label: "Assignment & Offers", icon: UserCheck },
   { href: "/admin/proofs", label: "Proof Review", icon: ShieldCheck },
   { href: "/admin/payouts", label: "Payouts Queue", icon: Wallet },
   { href: "/admin/refunds", label: "Refunds & Cancellations", icon: RotateCcw },
@@ -34,6 +34,7 @@ const NAV = [
   { href: "/admin/chats", label: "Support Chats", icon: MessageSquare },
   { href: "/admin/knowledge", label: "Knowledge Base", icon: BookOpen },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
+  { href: "/admin/notifications-settings", label: "Alert Settings", icon: Bell },
   { href: "/admin/templates", label: "Email Settings", icon: Bell },
   { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/backup", label: "Backup", icon: HardDriveDownload },
