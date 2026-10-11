@@ -14,11 +14,29 @@ export async function listBuddies(page = 1, pageSize = 20) {
   const db = createAdminClient();
   const from = (Math.max(1, page) - 1) * pageSize;
   const to = from + pageSize - 1;
+  // Columns added by migration 0038. If that migration has not been run yet,
+  // asking for them fails the whole query and the page shows nothing, with no
+  // clue why — so the select degrades instead and the UI gets told.
+  const NEW_IN_0038 = "clearance_tier, accepting_work, tasks_completed, ";
+
   const { data, count } = await db.from("buddy_profiles")
-    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, proof_test_score, comp_property, comp_welfare, comp_documents, comp_purchases, comp_communication, comp_reliability, competency_specialisms, competency_notes, approved_task_types, profiles!buddy_profiles_id_fkey(full_name, email, phone)", { count: "exact" })
+    .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, " + NEW_IN_0038 + "nda_signed_at, nda_signed_name, nda_version, proof_test_score, comp_property, comp_welfare, comp_documents, comp_purchases, comp_communication, comp_reliability, competency_specialisms, competency_notes, approved_task_types, profiles!buddy_profiles_id_fkey(full_name, email, phone)", { count: "exact" })
     .order("created_at", { ascending: false })
     .range(from, to);
-  const buddies = data ?? [];
+
+  let buddies: any[] = (data as any) ?? [];
+  let migrationMissing = false;
+
+  // Retry without the 0038 columns so the screen still works before the
+  // migration is run. The banner tells the admin what to do about it.
+  if (!data) {
+    migrationMissing = true;
+    const { data: fallback } = await db.from("buddy_profiles")
+      .select("id, vetting, skills, bank_name, bank_account_number, bank_account_name, created_at, city, date_of_birth, nin, address, state, lga, coverage_areas, occupation, experience, availability, education_level, course_of_study, year_of_graduation, school_attended, has_smartphone, can_drive, has_drivers_license, criminal_record, criminal_record_details, consent_background_checks, consent_data_processing, guarantors, next_of_kin, id_doc_type, id_doc_path, utility_bill_path, pcc_path, passport_photo_path, nin_slip_path, cv_path, vetting_checks, vetting_notes, nda_signed_at, nda_signed_name, nda_version, proof_test_score, comp_property, comp_welfare, comp_documents, comp_purchases, comp_communication, comp_reliability, competency_specialisms, competency_notes, approved_task_types, profiles!buddy_profiles_id_fkey(full_name, email, phone)", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    buddies = (fallback as any) ?? [];
+  }
   // Short-lived signed URLs for vetting documents (admin-only view).
   const paths = buddies.flatMap((b: any) => [b.id_doc_path, b.utility_bill_path, b.pcc_path, b.passport_photo_path, b.nin_slip_path, b.cv_path]).filter(Boolean) as string[];
   if (paths.length) {
@@ -42,7 +60,7 @@ export async function listBuddies(page = 1, pageSize = 20) {
       b.cv_url = b.cv_path ? urlOf.get(b.cv_path) : undefined;
     }
   }
-  return { rows: buddies, total: count ?? buddies.length };
+  return { rows: buddies, total: count ?? buddies.length, migrationMissing };
 }
 
 /**
