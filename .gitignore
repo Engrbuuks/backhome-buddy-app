@@ -3,3 +3,9 @@ node_modules
 .env.local
 .DS_Store
 *.log
+
+# A second copy of the app here once broke every build. Never again.
+bhb-skeleton/
+
+# Build artifact — should not be tracked.
+tsconfig.tsbuildinfo
