@@ -19,11 +19,12 @@ export default function ServicesEditor({ initial, upliftPct, urgentPct }: { init
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  function update(idx: number, field: keyof ServiceType, value: string | number) {
+  // `boolean` added for handles_cash — the first checkbox-backed field on a service.
+  function update(idx: number, field: keyof ServiceType, value: string | number | boolean) {
     setRows((r) => r.map((row, i) => (i === idx ? { ...row, [field]: value } : row)));
   }
   function addRow() {
-    setRows((r) => [...r, { _new: true, name: "", base_price_ngn: 0, default_buddy_payout_pct: 60, active: true }]);
+    setRows((r) => [...r, { _new: true, name: "", base_price_ngn: 0, default_buddy_payout_pct: 60, active: true, trust_tier: "standard", handles_cash: false, min_completed_tasks: 0 }]);
   }
   function save(idx: number) {
     const row = rows[idx];
@@ -39,6 +40,9 @@ export default function ServicesEditor({ initial, upliftPct, urgentPct }: { init
           pricing_mode: (row as any).pricing_mode === "from" ? "from" : "quote",
           from_price_usd: Number((row as any).from_price_usd ?? 0),
           active: row.active ?? true,
+          trust_tier: (row as any).trust_tier ?? "standard",
+          handles_cash: Boolean((row as any).handles_cash),
+          min_completed_tasks: Number((row as any).min_completed_tasks ?? 0),
         });
         // mark as saved (clear _new) — server revalidate will refresh on next load
         setRows((r) => r.map((x, i) => (i === idx ? { ...x, _new: false } : x)));
@@ -103,6 +107,38 @@ export default function ServicesEditor({ initial, upliftPct, urgentPct }: { init
               <div>
                 <p className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Client sees</p>
                 <p className="rounded-xl bg-bbb-bg px-3 py-2.5 text-xs font-bold leading-5">{(service as any).pricing_mode === "from" && Number((service as any).from_price_usd) > 0 ? `from $${Number((service as any).from_price_usd)} (A) · $${Math.round(Number((service as any).from_price_usd) * (1 + Number(uplift || 0) / 100))} (B)` : "Priced per task — free quote in 24h"}</p>
+              </div>
+              <div className="md:col-span-7 grid gap-3 border-t border-bbb-border pt-3 md:grid-cols-[200px_200px_1fr] md:items-end">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Trust tier</span>
+                  <select
+                    value={(service as any).trust_tier ?? "standard"}
+                    onChange={(e) => update(idx, "trust_tier" as any, e.target.value)}
+                    className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong"
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="high_value">High value — large sums, irreversible</option>
+                    <option value="safeguarding">Safeguarding — vulnerable person</option>
+                  </select>
+                </label>
+                <Field
+                  label="Min completed tasks"
+                  type="number"
+                  value={String((service as any).min_completed_tasks ?? 0)}
+                  onChange={(e) => update(idx, "min_completed_tasks" as any, Number(e.target.value))}
+                />
+                <label className="flex items-start gap-2.5 pb-2.5 text-sm leading-5">
+                  <input
+                    type="checkbox"
+                    checked={Boolean((service as any).handles_cash)}
+                    onChange={(e) => update(idx, "handles_cash" as any, e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-bbb-border accent-[#079516]"
+                  />
+                  <span className="text-bbb-slate">
+                    <span className="font-semibold text-bbb-charcoal">Buddy would receive client funds</span>
+                    <span className="mt-0.5 block text-xs">Tick to flag it, then pay the vendor directly. A buddy holding client cash is the largest fraud surface in this model, and removing the cash beats policing it.</span>
+                  </span>
+                </label>
               </div>
               <div className="flex gap-2">
                 <button disabled={pending} onClick={() => save(idx)} className="h-11 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white hover:bg-bbb-dark disabled:opacity-50">Save</button>

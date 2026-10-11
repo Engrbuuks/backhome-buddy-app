@@ -2,6 +2,7 @@
 import React, { useState, useTransition } from "react";
 import { ErrorState } from "@/components/StateBlocks";
 import { recordManualPayment, assignBuddy, reviewProof } from "@/lib/admin/workflow-actions";
+import OfferTrail from "./OfferTrail";
 import BestFitBuddies from "./BestFitBuddies";
 import { ProofMedia } from "@/components/ProofMedia";
 import AdjustPayout from "./AdjustPayout";
@@ -62,7 +63,10 @@ export default function WorkflowPanel({ request, buddies }: { request: any; budd
               </div>
             );
           })()}
-          {buddies.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved buddies yet — approve one in Buddy Management (all 8 vetting checks complete).</p>}
+          {buddies.length === 0 && <p className="mt-2 text-xs text-amber-600">No approved buddies yet — approve one in Buddy Management.</p>}
+          {/* Manual assignment above stays the override; this shows what the
+              cascade has already tried, and why it stalled if it has. */}
+          <OfferTrail requestId={request.id} status={request.status} />
         </div>
       )}
 

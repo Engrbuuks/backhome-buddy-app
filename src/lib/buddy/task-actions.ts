@@ -6,6 +6,34 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 import { canTransition } from "@/lib/money/stateMachine";
 import { notify, notifyAdmins } from "@/lib/notifications/notify";
 
+/**
+ * A buddy who may actually work right now.
+ *
+ * Checking `role === "buddy"` alone was not enough. `buddy_vetting` has a
+ * `suspended` state and the admin screen has a Suspend button, and suspension
+ * does stop NEW matches because the matcher filters on `approved` — but nothing
+ * here looked at vetting status, so a suspended buddy carried on starting tasks
+ * and submitting proof on everything already assigned to them. Suspension was a
+ * label rather than a control.
+ *
+ * Returns the profile only when the buddy is approved. Local to this file: a
+ * guard used twice does not need to become a shared export.
+ */
+async function workingBuddy() {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "buddy") return { profile: null, error: "Not authorized." };
+  const db = createAdminClient();
+  const { data: bp } = await db.from("buddy_profiles").select("vetting").eq("id", p.id).maybeSingle();
+  const vetting = bp?.vetting ?? "applied";
+  if (vetting === "suspended") {
+    return { profile: null, error: "Your account is suspended. Contact Backhome Buddy before continuing any task." };
+  }
+  if (vetting !== "approved") {
+    return { profile: null, error: "Your account is not yet approved for tasks." };
+  }
+  return { profile: p, error: "" };
+}
+
 async function myAssignedRequest(requestId: string, buddyId: string) {
   const db = createAdminClient();
   const { data: req } = await db.from("requests").select("id, status, assigned_buddy_id").eq("id", requestId).single();
@@ -18,8 +46,8 @@ async function transition(db: any, req: any, to: string, actorId: string, note: 
 }
 
 export async function startTask(requestId: string) {
-  const p = await getCurrentProfile();
-  if (!p || p.role !== "buddy") return { error: "Not authorized." };
+  const { profile: p, error: guardErr } = await workingBuddy();
+  if (!p) return { error: guardErr };
   const req = await myAssignedRequest(requestId, p.id);
   if (!req) return { error: "Task not found." };
   if (!canTransition(req.status, "in_progress")) return { error: `Cannot start from "${req.status}".` };
@@ -32,8 +60,8 @@ export async function startTask(requestId: string) {
 }
 
 export async function submitProof(_prev: unknown, formData: FormData) {
-  const p = await getCurrentProfile();
-  if (!p || p.role !== "buddy") return { error: "Not authorized." };
+  const { profile: p, error: guardErr } = await workingBuddy();
+  if (!p) return { error: guardErr };
   const requestId = String(formData.get("request_id") || "");
   const note = String(formData.get("note") || "").trim();
   if (!note) return { error: "Write your report — what was done, what you found." };

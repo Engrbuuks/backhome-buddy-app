@@ -42,6 +42,12 @@ export async function saveServiceType(input: {
   pricing_mode?: string;
   from_price_usd?: number;
   active?: boolean;
+  /** Exposure level, independent of skill. Decides which buddies may be offered it. */
+  trust_tier?: "standard" | "high_value" | "safeguarding";
+  /** True where the buddy would otherwise receive client funds. Pay the vendor direct instead. */
+  handles_cash?: boolean;
+  /** Completed tasks a buddy needs before this service type may be offered to them. */
+  min_completed_tasks?: number;
 }) {
   await assertAdmin();
   const db = createAdminClient();
@@ -52,6 +58,11 @@ export async function saveServiceType(input: {
     pricing_mode: input.pricing_mode === "from" ? "from" : "quote",
     from_price_usd: Number(input.from_price_usd ?? 0),
     active: input.active ?? true,
+    trust_tier: ["standard", "high_value", "safeguarding"].includes(String(input.trust_tier))
+      ? input.trust_tier : "standard",
+    handles_cash: Boolean(input.handles_cash),
+    // Clamped to the DB constraint so a typo cannot throw at the database.
+    min_completed_tasks: Math.min(500, Math.max(0, Math.round(Number(input.min_completed_tasks ?? 0)))),
   };
   if (input.id) {
     const { error } = await db.from("service_types").update(row).eq("id", input.id);
@@ -145,4 +156,35 @@ export async function deleteRegion(id: string) {
   const { error } = await db.from("regions").update({ active: false }).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/admin/regions");
+}
+
+// ---------- OFFER MODE (the safety valve) ----------
+
+export async function getOfferModeSetting(): Promise<"off" | "advisory" | "automatic"> {
+  const supabase = createClient();
+  const { data } = await supabase.from("app_settings").select("value").eq("key", "offer_mode").maybeSingle();
+  const m = (data?.value as any)?.mode;
+  return m === "off" || m === "automatic" ? m : "advisory";
+}
+
+/**
+ * Switch how task offers behave.
+ *
+ * Moving to "automatic" is the consequential one: from then on a paid task
+ * cascades down the shortlist on its own and expires unanswered offers. Only
+ * worth doing once the delivery records show buddies are actually receiving
+ * alerts, otherwise offers expire unseen and everything lands back in the
+ * admin queue anyway, with extra steps.
+ */
+export async function setOfferMode(mode: "off" | "advisory" | "automatic") {
+  await assertAdmin();
+  if (!["off", "advisory", "automatic"].includes(mode)) throw new Error("Unknown offer mode.");
+  const db = createAdminClient();
+  const { error } = await db
+    .from("app_settings")
+    .upsert({ key: "offer_mode", value: { mode }, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  await db.from("audit_log").insert({ action: "set_offer_mode", detail: { mode } });
+  revalidatePath("/admin/services");
+  revalidatePath("/admin/requests");
 }
