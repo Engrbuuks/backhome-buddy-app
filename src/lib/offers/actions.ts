@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
 import { notify, notifyAdmins } from "@/lib/notifications/notify";
 import { isDeclineReason, declineLabel } from "@/lib/offers/eligibility";
-import { offerNext } from "@/lib/offers/engine";
+import { offerNext, maybeExpireOffers } from "@/lib/offers/engine";
 
 /** Called after payment is recorded, and by the admin "re-offer" button. */
 export async function startOffering(requestId: string) {
@@ -108,6 +108,9 @@ export async function myPendingOffer() {
   const p = await getCurrentProfile();
   if (!p || p.role !== "buddy") return null;
   const db = createAdminClient();
+  // Close out anything stale before answering. This is what keeps the cascade
+  // moving on a Hobby plan, where cron can only run once a day.
+  await maybeExpireOffers(db);
   const { data } = await db
     .from("task_offers")
     .select("id, request_id, expires_at, offered_at, requests(title, urgency, recipient_address, buddy_payout_ngn, service_types(name))")
@@ -125,6 +128,7 @@ export async function listOffersForRequest(requestId: string) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "admin") return [];
   const db = createAdminClient();
+  await maybeExpireOffers(db);
   const { data } = await db
     .from("task_offers")
     .select("id, buddy_id, round, rank, score, status, offered_at, expires_at, responded_at, decline_reason, decline_note, profiles!task_offers_buddy_id_fkey(full_name)")

@@ -69,4 +69,15 @@ update app_settings set value = '{"mode":"automatic"}'::jsonb where key = 'offer
 Configured in `vercel.json`, both protected by `CRON_SECRET`.
 
 - `/api/cron/auto-release` — daily, confirms completed work after the objection window
-- `/api/cron/offers` — every 10 minutes, expires stale offers and cascades to the next buddy
+- `/api/cron/offers` — daily, expires stale offers and cascades to the next buddy
+
+> **Why daily, when offer windows are 20 to 45 minutes?**
+> Vercel's Hobby plan rejects any cron more frequent than once per day, and the
+> whole deployment fails with "Hobby accounts are limited to daily cron jobs".
+> So offer expiry does not rely on the cron: `maybeExpireOffers` runs the same
+> sweep lazily whenever a buddy opens their dashboard or an admin opens a
+> request, throttled to once a minute across the deployment. The daily cron is
+> only a backstop for quiet periods when nobody loads anything.
+>
+> On a Pro plan you can set this back to `*/10 * * * *` for tighter timing. It
+> is not required; the lazy sweep covers the realistic cases on its own.

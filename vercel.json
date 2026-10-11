@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/offers",
-      "schedule": "*/10 * * * *"
+      "schedule": "17 4 * * *"
     }
   ],
   "headers": [

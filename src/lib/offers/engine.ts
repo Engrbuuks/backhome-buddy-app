@@ -256,6 +256,43 @@ export async function offerNext(db: any, requestId: string, actorId: string | nu
 
 
 /**
+ * Opportunistic offer expiry — the sweep that does not need a frequent cron.
+ *
+ * Vercel's Hobby plan caps cron jobs at once per DAY, so a scheduled sweep
+ * cannot drive a 20 to 45 minute offer window. Rather than make the offer
+ * layer depend on a paid plan, expiry also runs lazily: any time someone loads
+ * a page that cares about offers, stale ones are closed and the next buddy is
+ * offered the task.
+ *
+ * Throttled to once a minute across the whole deployment via app_settings, so
+ * a busy minute does not run the sweep dozens of times. Never throws: a failed
+ * sweep must not break the page that triggered it.
+ *
+ * The daily cron stays as a backstop for quiet periods when nobody loads
+ * anything. On Pro you can set it back to "*‍/10 * * * *" and this becomes
+ * belt and braces.
+ */
+export async function maybeExpireOffers(db: any): Promise<void> {
+  try {
+    const KEY = "offer_sweep_last_run";
+    const now = Date.now();
+
+    const { data } = await db.from("app_settings").select("value").eq("key", KEY).maybeSingle();
+    const last = Number((data?.value as any)?.at ?? 0);
+    if (now - last < 60_000) return;   // swept recently; nothing to do
+
+    // Claim the slot BEFORE sweeping, so two concurrent page loads do not both
+    // run it. Worst case on a race is one wasted sweep, never a double cascade:
+    // the unique index still allows only one pending offer per request.
+    await db.from("app_settings").upsert({ key: KEY, value: { at: now }, updated_at: new Date().toISOString() });
+
+    await expireAndCascade();
+  } catch {
+    /* A sweep that fails is a delay, not an error worth surfacing. */
+  }
+}
+
+/**
  * Cron: expire offers whose window has closed, then cascade each affected
  * request to the next buddy. Separate from the auto-release job because it
  * runs on a very different clock.
