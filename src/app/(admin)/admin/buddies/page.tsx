@@ -18,9 +18,10 @@ export default async function BuddiesPage({ searchParams }: { searchParams?: { p
         <div className="mb-4 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
           <p className="text-sm font-extrabold text-amber-900">Database migration not run yet</p>
           <p className="mt-1 text-sm text-amber-800">
-            Trust tiers, buddy clearance and the availability switch will not work until
-            <strong> supabase/migrations/0038_trust_tiers_and_identity.sql</strong> is run in Supabase.
-            Run 0038, then 0039 and 0040, in that order. They are safe to re-run.
+            Trust tiers, buddy clearance, the availability switch and the automated bank account check
+            will not work until the outstanding migrations are run in Supabase. Run
+            <strong> 0038</strong>, <strong>0039</strong>, <strong>0040</strong> and <strong>0041</strong>,
+            in that order. All are safe to re-run.
           </p>
         </div>
       )}

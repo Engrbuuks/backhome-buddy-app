@@ -5,6 +5,7 @@ import CompetencyEditor from "@/components/CompetencyEditor";
 import InterviewLauncher from "@/components/InterviewLauncher";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
+import { runBankCheck } from "@/lib/verification/actions";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction, setBuddyClearanceTier, setVettingCheckRequirement, getVettingOverrides } from "@/lib/admin/ops-actions";
 import { DeleteButton } from "@/components/DeleteButton";
 import { deleteUser } from "@/lib/admin/proof-actions";
@@ -139,6 +140,49 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
       </div>
 
       <div className="space-y-4">
+        {/* The automated identity check. Free, and the strongest evidence
+            available without paying a KYC vendor: to hold this account the
+            person already passed a Nigerian bank's own BVN-backed KYC. */}
+        <div className="mb-4 rounded-2xl bg-white p-4 ring-1 ring-bbb-border">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Bank account check</p>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => run(async () => {
+                const r = await runBankCheck(b.id);
+                return { error: r.error };
+              })}
+              className="rounded-lg border border-bbb-border px-3 py-1.5 text-xs font-bold text-bbb-slate hover:border-bbb-strong disabled:opacity-50"
+            >
+              Run check
+            </button>
+          </div>
+          {b.bank_verified_at ? (
+            <div className="mt-2 text-sm">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${
+                b.bank_match_outcome === "pass" ? "bg-green-100 text-green-700"
+                : b.bank_match_outcome === "fail" ? "bg-red-100 text-red-700"
+                : "bg-amber-100 text-amber-700"
+              }`}>
+                {b.bank_match_outcome === "pass" ? "verified" : b.bank_match_outcome === "fail" ? "name mismatch" : "needs a look"}
+              </span>
+              <p className="mt-1.5 text-bbb-charcoal">
+                Bank holds: <strong>{b.bank_verified_name}</strong>
+              </p>
+              <p className="text-xs text-bbb-slate">
+                Profile name: {b.profiles?.full_name ?? "—"} · checked {new Date(b.bank_verified_at).toLocaleDateString()}
+                {b.bank_match_score != null ? ` · ${Math.round(Number(b.bank_match_score) * 100)}% of names matched` : ""}
+              </p>
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-bbb-slate">
+              Not checked yet. It runs automatically when the buddy saves their payout details, and the bank must be
+              picked from the list so it can be looked up.
+            </p>
+          )}
+        </div>
+
         <div className="rounded-2xl bg-bbb-bg p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-extrabold uppercase tracking-wide text-bbb-slate">Vetting checklist</p>

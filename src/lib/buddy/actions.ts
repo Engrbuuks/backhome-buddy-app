@@ -29,13 +29,28 @@ export async function savePayoutDetails(_prev: unknown, formData: FormData) {
   const payload = {
     id: profile.id,
     bank_name: String(formData.get("bank_name") || ""),
-    bank_account_number: String(formData.get("bank_account_number") || ""),
+    bank_code: String(formData.get("bank_code") || "") || null,
+    bank_account_number: String(formData.get("bank_account_number") || "").replace(/\D/g, ""),
     bank_account_name: String(formData.get("bank_account_name") || ""),
   };
   const { error } = await supabase.from("buddy_profiles").upsert(payload);
   if (error) return { error: error.message };
+
+  // Verify against the bank immediately, rather than leaving it for an admin
+  // to tick by hand later. The buddy sees the result on the spot and can fix a
+  // typo now, which is the whole point of automating it.
+  //
+  // Non-fatal: the details are saved whether or not the lookup succeeds.
+  let check: any = null;
+  try {
+    const { verifyBuddyBankAccount } = await import("@/lib/verification/bank");
+    check = await verifyBuddyBankAccount(profile.id, profile.id);
+  } catch (e) {
+    console.error("bank verification after save failed:", e);
+  }
+
   revalidatePath("/buddy/settings");
-  return { error: "", saved: true };
+  return { error: "", saved: true, check };
 }
 
 /**

@@ -1,12 +1,19 @@
 "use client";
-import React, { useState, useTransition } from "react";
+import React, { useState, useTransition, useEffect } from "react";
 import { useFormState } from "react-dom";
 import { Field } from "@/components/FormControls";
 import { ErrorState } from "@/components/StateBlocks";
 import { savePayoutDetails, setAcceptingWork } from "@/lib/buddy/actions";
+import { getBankList } from "@/lib/verification/actions";
 
 export default function PayoutDetailsForm({ initial }: { initial: any }) {
   const [state, formAction] = useFormState(savePayoutDetails, { error: "" });
+
+  // The bank code is what makes the lookup possible; a free-text bank name
+  // cannot be resolved. Loaded from Paystack and cached server side.
+  const [banks, setBanks] = useState<{ name: string; code: string }[]>([]);
+  const [bankCode, setBankCode] = useState<string>(initial?.bank_code ?? "");
+  useEffect(() => { getBankList().then(setBanks).catch(() => {}); }, []);
 
   // The buddy's own availability switch. Defaults to on for anyone whose row
   // predates the column.
@@ -61,14 +68,61 @@ export default function PayoutDetailsForm({ initial }: { initial: any }) {
         <p className="mt-1 text-sm text-bbb-slate">Where we send your earnings. Required before your first payout.</p>
       </div>
       {state?.error && <div className="mb-4"><ErrorState title="Could not save" message={state.error} /></div>}
-      {"saved" in (state ?? {}) && (state as any).saved && (
-        <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700">Payout details saved.</div>
-      )}
+      {"saved" in (state ?? {}) && (state as any).saved && (() => {
+        const c = (state as any).check;
+        if (!c?.ran) {
+          return (
+            <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-semibold">Payout details saved.</p>
+              {c?.reason && <p className="mt-1 text-xs">Account check not completed: {c.reason}</p>}
+            </div>
+          );
+        }
+        if (c.outcome === "pass") {
+          return (
+            <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+              <p className="font-semibold">Saved and verified.</p>
+              <p className="mt-1 text-xs">Your bank confirms this account belongs to {c.bankName}.</p>
+            </div>
+          );
+        }
+        return (
+          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">Saved, but the name does not match</p>
+            <p className="mt-1 text-xs">
+              Your bank has this account as <strong>{c.bankName}</strong>. If that is not you, check the account
+              number and bank. If it is you under a different spelling, we will confirm it by hand.
+            </p>
+          </div>
+        );
+      })()}
       <form action={formAction} className="space-y-4 rounded-3xl border border-bbb-border bg-white p-6 shadow-soft">
-        <Field label="Bank name" name="bank_name" required defaultValue={initial?.bank_name ?? ""} placeholder="e.g. GTBank" />
+        {banks.length > 0 ? (
+          <label className="block">
+            <span className="mb-1.5 block text-sm font-semibold text-bbb-charcoal">Bank</span>
+            <select
+              name="bank_code"
+              required
+              value={bankCode}
+              onChange={(e) => setBankCode(e.target.value)}
+              className="h-11 w-full rounded-xl border border-bbb-border bg-white px-3 text-sm outline-none focus:border-bbb-strong"
+            >
+              <option value="">Select your bank…</option>
+              {banks.map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
+            </select>
+            {/* Carried alongside the code so the readable name is stored too. */}
+            <input type="hidden" name="bank_name" value={banks.find((b) => b.code === bankCode)?.name ?? (initial?.bank_name ?? "")} />
+          </label>
+        ) : (
+          <Field label="Bank name" name="bank_name" required defaultValue={initial?.bank_name ?? ""} placeholder="e.g. GTBank" />
+        )}
         <Field label="Account number" name="bank_account_number" required defaultValue={initial?.bank_account_number ?? ""} placeholder="10-digit NUBAN" minLength={10} maxLength={10} />
         <Field label="Account name" name="bank_account_name" required defaultValue={initial?.bank_account_name ?? ""} placeholder="Name on the account" />
-        <button className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">Save details</button>
+        <button className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">Save and verify</button>
+        <p className="text-xs text-bbb-slate">
+          We check the name on this account against your profile automatically. Nothing is shared with anyone;
+          it simply confirms the account is yours.
+        </p>
       </form>
     </div>
   );
