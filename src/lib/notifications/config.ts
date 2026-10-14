@@ -36,6 +36,7 @@ export const NOTIF_DEFS: ReadonlyArray<NotifDef> = [
   { key: "payout_eligible", label: "Payout eligible for release", audience: "buddy", essential: true, group: "Payments", defaultSubject: "Your payout is now eligible for release." },
   { key: "payout_sent", label: "Payout sent to buddy", audience: "buddy", essential: true, group: "Payments", defaultSubject: "You have been paid" },
   { key: "refund_sent", label: "Refund sent", audience: "client", essential: true, group: "Payments", defaultSubject: "Refund sent" },
+  { key: "refund_decision", label: "Refund request approved or declined", audience: "client", essential: true, group: "Payments", defaultSubject: "Update on your refund request" },
 
   // Task lifecycle
   { key: "quote_ready", label: "Quote ready", audience: "client", essential: true, group: "Task updates", defaultSubject: "Your quote is ready" },

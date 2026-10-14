@@ -10,8 +10,12 @@ async function move(db: any, req: any, to: string, actorId: string, note: string
   await db.from("request_timeline").insert({ request_id: req.id, from_status: req.status, to_status: to, actor_id: actorId, note });
 }
 
-/** Client cancels. submitted/quoted = clean; paid/assigned = cancelled, refund pending. */
-export async function cancelRequest(requestId: string) {
+/** Client cancels. submitted/quoted = clean; paid/assigned = cancelled, refund pending.
+ *
+ *  `reason` is optional and free text. It used to be absent entirely, which
+ *  meant an admin opened the refund queue knowing a client had walked away but
+ *  never why. */
+export async function cancelRequest(requestId: string, reason?: string) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "client") return { error: "Not authorized." };
   const db = createAdminClient();
@@ -19,7 +23,9 @@ export async function cancelRequest(requestId: string) {
   if (!req || req.client_id !== p.id) return { error: "Request not found." };
   if (!canTransition(req.status, "cancelled")) return { error: `Cannot cancel from "${req.status}". Raise an issue instead.` };
   const refundPending = ["paid", "assigned"].includes(req.status);
-  await move(db, req, "cancelled", p.id, refundPending ? "Client cancelled — refund pending" : "Client cancelled");
+  const why = String(reason || "").trim().slice(0, 300);
+  const base = refundPending ? "Client cancelled — refund pending" : "Client cancelled";
+  await move(db, req, "cancelled", p.id, why ? `${base}: ${why}` : base);
   if (refundPending) await notifyAdmins("Cancellation — refund pending", "A paid request was cancelled. Process the refund.", "/admin/refunds");
   revalidatePath(`/client/requests/${requestId}`);
   return { error: "" };
@@ -43,8 +49,16 @@ export async function raiseDispute(_prev: unknown, formData: FormData) {
   return { error: "", saved: true };
 }
 
-/** Admin records a manual refund. cancelled/disputed → refunded; funds released back. */
-export async function recordManualRefund(requestId: string) {
+/**
+ * Admin records a manual refund. cancelled/disputed → refunded; funds released back.
+ *
+ * `amountNgn` makes a PARTIAL refund possible, which is what the non
+ * refundable amount needs: the client gets part of the payment back and the
+ * rest is retained. Called with no amount, the behaviour is unchanged from
+ * before — except that an approved refund request now supplies the figure, so
+ * the admin does not have to retype it and cannot mistype it.
+ */
+export async function recordManualRefund(requestId: string, amountNgn?: number) {
   const p = await getCurrentProfile();
   if (!p || p.role !== "admin") return { error: "Not authorized." };
   const db = createAdminClient();
@@ -54,17 +68,47 @@ export async function recordManualRefund(requestId: string) {
   const { data: pay } = await db.from("payments").select("id, amount_ngn, funds_held").eq("request_id", req.id).eq("status", "succeeded").single();
   if (!pay) return { error: "No succeeded payment to refund." };
   if (!pay.funds_held) return { error: "Funds already released — refund not possible from held funds." };
+
+  const paid = Number(pay.amount_ngn);
+
+  // Where the amount comes from, in order of authority: what the caller said,
+  // then what an approved refund request decided, then the whole payment.
+  let amount = paid;
+  let approvedId: string | null = null;
+  if (amountNgn != null) {
+    amount = Math.round(Number(amountNgn) * 100) / 100;
+  } else {
+    try {
+      const { data: rr } = await db.from("refund_requests")
+        .select("id, refunded_ngn").eq("request_id", req.id).eq("status", "approved")
+        .order("decided_at", { ascending: false }).limit(1).maybeSingle();
+      if (rr?.refunded_ngn != null) { amount = Number(rr.refunded_ngn); approvedId = rr.id; }
+    } catch { /* table not migrated yet — fall back to the full amount */ }
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "The refund amount must be greater than zero." };
+  if (amount > paid) return { error: `A refund cannot exceed the ${paid} paid.` };
+
+  const partial = amount < paid;
+  const retained = Math.round((paid - amount) * 100) / 100;
+
   const { error: rErr } = await db.from("refunds").insert({
-    payment_id: pay.id, request_id: req.id, amount_ngn: pay.amount_ngn,
-    provider_reference: `manual-refund-${req.id}`, status: "succeeded", reason: "Manual refund (bank transfer)",
+    payment_id: pay.id, request_id: req.id, amount_ngn: amount,
+    // The unsuffixed reference is kept for a full refund so the existing
+    // "already recorded" guard still catches a double click. A partial gets a
+    // distinct reference because the column is unique.
+    provider_reference: partial ? `manual-refund-${req.id}-p${Math.round(amount)}` : `manual-refund-${req.id}`,
+    status: "succeeded",
+    reason: partial ? `Partial refund (bank transfer) — ${retained} retained` : "Manual refund (bank transfer)",
   });
   if (rErr) return { error: rErr.message.includes("duplicate") ? "Refund already recorded." : rErr.message };
-  await db.from("payments").update({ funds_held: false, status: "refunded" }).eq("id", pay.id);
-  await db.from("transactions").insert({ kind: "refund", request_id: req.id, amount_ngn: -Number(pay.amount_ngn), note: "Manual refund to client" });
-  await move(db, req, "refunded", p.id, "Client refunded (manual transfer)");
-  await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_refund", target_id: req.id, detail: { amount_ngn: pay.amount_ngn } });
+
+  await db.from("payments").update({ funds_held: false, status: partial ? "partial_refund" : "refunded" }).eq("id", pay.id);
+  await db.from("transactions").insert({ kind: "refund", request_id: req.id, amount_ngn: -amount, note: partial ? `Partial refund to client — ${retained} retained` : "Manual refund to client" });
+  await move(db, req, "refunded", p.id, partial ? `Client partially refunded (manual transfer) — ${retained} retained` : "Client refunded (manual transfer)");
+  await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_refund", target_id: req.id, detail: { amount_ngn: amount, retained_ngn: retained, paid_ngn: paid, refund_request_id: approvedId } });
   const { data: r5 } = await db.from("requests").select("client_id").eq("id", req.id).single();
-  if (r5) await notify(r5.client_id, "Refund sent", "Your refund has been sent to you.", `/client/requests/${req.id}`);
+  if (r5) await notify(r5.client_id, "Refund sent", partial ? "Your refund has been sent to you." : "Your refund has been sent to you.", `/client/requests/${req.id}`);
   revalidatePath("/admin/refunds"); revalidatePath("/admin/disputes");
   return { error: "" };
 }

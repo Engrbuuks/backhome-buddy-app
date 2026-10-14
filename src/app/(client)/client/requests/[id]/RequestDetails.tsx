@@ -10,6 +10,8 @@ import ClientCharges from "./ClientCharges";
 import ClientMilestones from "./ClientMilestones";
 import QuoteResponse from "./QuoteResponse";
 import { cancelRequest, raiseDispute } from "@/lib/money/edge-actions";
+import RefundPanel from "./RefundPanel";
+import type { RefundQuote } from "@/lib/money/refund-policy";
 import { ProofMedia } from "@/components/ProofMedia";
 import { useFormState } from "react-dom";
 import { ErrorState } from "@/components/StateBlocks";
@@ -17,14 +19,22 @@ import { ErrorState } from "@/components/StateBlocks";
 const LIFECYCLE = ["submitted", "quoted", "paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed"] as const;
 const PROOF_ICON = { photo: Camera, video: Video, report: FileText } as const;
 
-export default function RequestDetails({ request, charges = [], currency = "USD", rates, bank, milestones = [] }: { request: any; charges?: any[]; currency?: any; rates?: any; bank?: any; milestones?: any[] }) {
+export default function RequestDetails({ request, charges = [], currency = "USD", rates, bank, milestones = [], refundQuote = null }: { request: any; charges?: any[]; currency?: any; rates?: any; bank?: any; milestones?: any[]; refundQuote?: RefundQuote | null }) {
   const [confirmError, setConfirmError] = useState("");
   const [confirming, startConfirm] = useTransition();
   const [cancelError, setCancelError] = useState("");
   const [cancelling, startCancel] = useTransition();
   const [showIssue, setShowIssue] = useState(false);
   const [issueState, issueAction] = useFormState(raiseDispute, { error: "" });
-  const CANCELLABLE = ["draft", "submitted", "quoted", "paid"];
+  // Cancel is for requests with no money on them. The moment a payment exists
+  // the route is the refund panel instead, because that is what applies the
+  // policy and captures a reason. "paid" stays here only as a fallback for a
+  // deployment where the refund flow is not live yet, so nobody is ever left
+  // on a paid request with no way out.
+  const refundFlowLive = Boolean(refundQuote?.enabled);
+  const CANCELLABLE = refundFlowLive
+    ? ["draft", "submitted", "quoted"]
+    : ["draft", "submitted", "quoted", "paid"];
   const DISPUTABLE = ["in_progress", "proof_ready", "proof_approved", "completed"];
   const reached = LIFECYCLE.indexOf(request.status) >= 0 ? LIFECYCLE.indexOf(request.status) : -1;
   const total = (request.quote_items ?? []).reduce((s: number, q: any) => s + Number(q.amount_ngn || 0), 0);
@@ -138,6 +148,8 @@ export default function RequestDetails({ request, charges = [], currency = "USD"
               </div>
             )}
           </div>
+
+          <RefundPanel requestId={request.id} quote={refundQuote} currency={currency} rates={rates} />
 
           {(CANCELLABLE.includes(request.status) || DISPUTABLE.includes(request.status)) && (
             <div className="rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">

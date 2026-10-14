@@ -6,6 +6,7 @@ import { listCharges } from "@/lib/admin/charge-actions";
 import MarkNotificationsRead from "@/components/MarkNotificationsRead";
 import { getMyDisplay, getBankDetails } from "@/lib/money/fx";
 import { getRequestMilestones } from "@/lib/requests/milestone-actions";
+import { quoteRefund } from "@/lib/money/refund-actions";
 
 export default async function RequestDetailPage({ params }: { params: { id: string } }) {
   const request = await getRequestById(params.id);
@@ -20,10 +21,13 @@ export default async function RequestDetailPage({ params }: { params: { id: stri
   const milestones = CLIENT_MILESTONE_STATUSES.includes(request.status)
     ? await getRequestMilestones(params.id)
     : [];
+  // Quoted server side so the client is shown the same figures the server will
+  // act on, rather than anything the browser worked out for itself.
+  const refundQuote = await quoteRefund(params.id);
   return (
     <>
       <MarkNotificationsRead link={`/client/requests/${params.id}`} />
-      <RequestDetails request={request} charges={charges} currency={currency} rates={rates} bank={bank} milestones={milestones} />
+      <RequestDetails request={request} charges={charges} currency={currency} rates={rates} bank={bank} milestones={milestones} refundQuote={refundQuote} />
     </>
   );
 }
