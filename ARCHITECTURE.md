@@ -520,8 +520,24 @@ Rule of thumb: *business decisions = no-code; plumbing, security, and money = co
    are enabled on the business account (payouts to buddies require the Transfers/Disbursement product).
 3. **Margin model.** Is buddy payout a flat % of client price (default 60%), per-service, or
    set manually per quote? The schema supports all three; pick the default behaviour.
-4. **Refund policy.** Cancel-before-assignment = auto full refund? Cancel-after = admin
-   decision? Define the rules so the UI can state them to clients.
+4. ~~**Refund policy.**~~ **DECIDED** (migration 0042). A client requests a refund from the
+   request detail page at any status that holds money. Three rules, all enforced in code
+   (`src/lib/money/refund-policy.ts`, 30 unit tests):
+   - **Before a buddy is assigned, nothing is retained** and, with
+     `auto_approve_unassigned` on, the request is approved without an admin.
+   - **If the fault is ours or the buddy's, nothing is retained**, at any stage. Fault is
+     attributed by the admin at decision time (`client` / `ours` / `buddy` / `external`).
+   - **Otherwise the stage decides**: a percentage of the amount paid with a naira floor,
+     both clamped so retention can never exceed the payment. Defaults: assigned 10% or
+     ₦1,000, in progress 25% or ₦2,000, proof submitted onward 100%. Editable at
+     `/admin/refunds` without a deployment.
+   An admin may override any computed figure; `policy_retained_ngn` and `retained_ngn` are
+   both stored so an exception is auditable. Approval is a decision only — the request moves
+   to `cancelled` or `disputed` and the money is sent by a human, who then presses *Record
+   refund sent*. The client is never told the money has gone until it has.
+   **Still open:** when a partial refund is taken, the retained slice is not automatically
+   paid to a buddy who had already incurred costs. The admin is prompted to settle that from
+   the Payouts screen by hand.
 5. **KYC depth for buddies.** What documents/verification are required to approve a buddy? Affects the application form.
 6. **Currency.** Client pays in NGN only for v1? (Diaspora clients may expect to pay in USD/GBP —
    that's multi-currency, a v2 decision with real payment implications.)
