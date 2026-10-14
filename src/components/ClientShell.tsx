@@ -14,7 +14,7 @@ const NAV = [
   { label: "Recipients", href: "/client/recipients", icon: UsersRound },
   { label: "Notifications", href: "/client/notifications", icon: Bell },
   { label: "Support", href: "/client/support", icon: LifeBuoy },
-  { label: "Profile", href: "/client/profile", icon: Settings },
+  { label: "Settings", href: "/client/profile", icon: Settings },
 ];
 
 export function ClientShell({ children, unreadCount = 0 }: { children: React.ReactNode; unreadCount?: number }) {

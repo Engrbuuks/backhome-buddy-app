@@ -41,10 +41,10 @@ export default function RefundsQueue({
   const [pending, start] = useTransition();
 
   return (
-    <AdminShell title="Refunds & Cancellations">
+    <AdminShell title="Refunds & Held Funds">
       <PageHeader
         eyebrow="Money back"
-        title="Refunds & Cancellations"
+        title="Refunds & Held Funds"
         description="Decide refund requests, then transfer the money and record it. Approving is a decision; sending is a separate act, and the client is only told the money is on its way once you have actually sent it."
       />
 
