@@ -1,5 +1,20 @@
-"use server";
+/**
+ * SECURITY: no "use server" here, deliberately. The recipient address is a
+ * parameter. Exported from a "use server" file this was an open relay: anyone
+ * on the internet could send "your Backhome Buddy application was rejected"
+ * from this company's authenticated sending domain, to any address, with the
+ * greeting name under their control — harassment at your expense, and a fast
+ * route to the domain being blocklisted.
+ *
+ * It is only ever called from admin-guarded actions (ops-actions.ts and
+ * recruitment-actions.ts), which already know who is asking and who the
+ * applicant is.
+ */
 import { sendEmailPublic } from "@/lib/notifications/notify";
+
+if (typeof window !== "undefined") {
+  throw new Error("admin/rejection-email is server-only and must never reach the browser.");
+}
 
 /** Sends a warm, encouraging rejection email that leaves the door open to
  *  reapply later. Used by both buddy-vetting and recruitment rejections.

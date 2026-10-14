@@ -118,11 +118,25 @@ export default function PayoutDetailsForm({ initial }: { initial: any }) {
         )}
         <Field label="Account number" name="bank_account_number" required defaultValue={initial?.bank_account_number ?? ""} placeholder="10-digit NUBAN" minLength={10} maxLength={10} />
         <Field label="Account name" name="bank_account_name" required defaultValue={initial?.bank_account_name ?? ""} placeholder="Name on the account" />
-        <button className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">Save and verify</button>
-        <p className="text-xs text-bbb-slate">
-          We check the name on this account against your profile automatically. Nothing is shared with anyone;
-          it simply confirms the account is yours.
-        </p>
+        <button className="h-11 w-full rounded-xl bg-bbb-strong text-sm font-bold text-white hover:bg-bbb-dark">
+          {banks.length > 0 ? "Save and verify" : "Save"}
+        </button>
+        {/* Only promise the automatic check when it can actually run. Without
+            the Paystack key the bank list comes back empty, the dropdown
+            becomes a free-text box, no bank code is stored and the check
+            silently does nothing — while this paragraph told the buddy the
+            opposite. */}
+        {banks.length > 0 ? (
+          <p className="text-xs text-bbb-slate">
+            We check the name on this account against your profile automatically. Nothing is shared with anyone;
+            it simply confirms the account is yours.
+          </p>
+        ) : (
+          <p className="text-xs text-bbb-slate">
+            Type your bank name exactly as it appears on your statement. A member of our team will check these
+            details by hand before your first payout.
+          </p>
+        )}
       </form>
     </div>
   );

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentProfile } from "@/lib/auth/roles";
-import { canTransition } from "@/lib/money/stateMachine";
+import { canTransition, isPayoutEligible } from "@/lib/money/stateMachine";
 import { notify } from "@/lib/notifications/notify";
 
 async function admin() {
@@ -10,11 +10,36 @@ async function admin() {
   if (!p || p.role !== "admin") return null;
   return p;
 }
-async function transition(db: any, req: any, to: string, actorId: string, note: string) {
-  await db.from("requests").update({ status: to, updated_at: new Date().toISOString() }).eq("id", req.id);
-  await db.from("request_timeline").insert({ request_id: req.id, from_status: req.status, to_status: to, actor_id: actorId, note });
+/**
+ * Move a request to a new status, but only if it is still where we think.
+ *
+ * The `.eq("status", req.status)` is the whole point. Without it this was a
+ * read, then an unconditional write, with the check happening long before the
+ * write and never rechecked. Two admins acting in the same minute — one
+ * releasing a payout, one approving a refund — would both pass their checks
+ * and both write, paying the buddy and refunding the client out of the same
+ * money. The offer system already got this right in migration 0039 with
+ * `for update`; the money paths did not.
+ *
+ * Returns false when somebody else moved it first. No timeline row is written
+ * in that case, so history never records a transition that did not happen.
+ */
+async function transition(db: any, req: any, to: string, actorId: string, note: string): Promise<boolean> {
+  const from = req.status;
+  const { data: changed } = await db
+    .from("requests")
+    .update({ status: to, updated_at: new Date().toISOString() })
+    .eq("id", req.id)
+    .eq("status", from)
+    .select("id");
+  if (!changed || changed.length === 0) return false;
+  await db.from("request_timeline").insert({ request_id: req.id, from_status: from, to_status: to, actor_id: actorId, note });
   req.status = to;
+  return true;
 }
+
+/** The message shown when a conditional move loses the race. */
+const RACED = "This task was changed by someone else a moment ago. Reload and try again.";
 
 /** Record an offline payment (bank transfer). quoted → awaiting_pay → paid, funds HELD. */
 export async function recordManualPayment(requestId: string) {
@@ -26,17 +51,20 @@ export async function recordManualPayment(requestId: string) {
   if (!canTransition(req.status, "awaiting_pay")) return { error: `Cannot record payment from "${req.status}".` };
 
   const reference = `manual-${requestId}`;
-  const { error: payErr } = await db.from("payments").insert({
+  const { data: payRow, error: payErr } = await db.from("payments").insert({
     request_id: req.id, client_id: req.client_id, provider: "manual",
     provider_reference: reference, amount_ngn: req.client_price_ngn,
     status: "succeeded", funds_held: true,
-  });
+  }).select("id").single();
   if (payErr) return { error: payErr.message.includes("duplicate") ? "Payment already recorded for this request." : payErr.message };
-  await db.from("transactions").insert({ kind: "payment", request_id: req.id, amount_ngn: req.client_price_ngn, note: "Manual/bank transfer payment" });
-  await transition(db, req, "awaiting_pay", p.id, "Offline payment being recorded");
-  await transition(db, req, "paid", p.id, "Payment received (bank transfer) — funds held");
+  // payment_id was always left null, so a ledger row had no identifier of its
+  // own. Deleting a request then nulled request_id too and the line became
+  // untraceable. Link it.
+  await db.from("transactions").insert({ kind: "payment", request_id: req.id, payment_id: payRow?.id ?? null, amount_ngn: req.client_price_ngn, note: "Manual/bank transfer payment" });
+  if (!(await transition(db, req, "awaiting_pay", p.id, "Offline payment being recorded"))) return { error: RACED };
+  if (!(await transition(db, req, "paid", p.id, "Payment received (bank transfer) — funds held"))) return { error: RACED };
   await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_payment", target_id: req.id, detail: { amount_ngn: req.client_price_ngn } });
-  await notify(req.client_id, "Payment received", "Your payment is confirmed and held securely. We are assigning your buddy.", `/client/requests/${req.id}`, "payment_received");
+  await notify(req.client_id, "Payment received", "Your payment is confirmed. We hold it against this task and release it to your buddy only after the work is done and you accept the proof. We are assigning your buddy now.", `/client/requests/${req.id}`, "payment_received");
 
   // Payment is the trigger for the offer cascade. Non-fatal on purpose: if no
   // buddy can be offered the task, the payment is still recorded and the
@@ -69,7 +97,7 @@ export async function assignBuddy(requestId: string, buddyId: string) {
   const { data: buddy } = await db.from("buddy_profiles").select("id, vetting").eq("id", buddyId).single();
   if (!buddy || buddy.vetting !== "approved") return { error: "Buddy is not approved." };
   await db.from("requests").update({ assigned_buddy_id: buddyId }).eq("id", req.id);
-  await transition(db, req, "assigned", p.id, "Buddy assigned");
+  if (!(await transition(db, req, "assigned", p.id, "Buddy assigned"))) return { error: RACED };
 
   // An admin assigning by hand overrides the cascade. Whatever offer was live
   // is no longer meaningful, so retire it rather than leaving a buddy staring
@@ -82,7 +110,7 @@ export async function assignBuddy(requestId: string, buddyId: string) {
   }
   // Copy the service type's milestone template onto this request (once).
   try {
-    const { seedRequestMilestones } = await import("@/lib/requests/milestone-actions");
+    const { seedRequestMilestones } = await import("@/lib/requests/milestone-engine");
     await seedRequestMilestones(req.id);
   } catch { /* non-fatal */ }
   await db.from("audit_log").insert({ actor_id: p.id, action: "assign_buddy", target_id: req.id, detail: { buddyId } });
@@ -101,7 +129,7 @@ export async function reviewProof(requestId: string, approve: boolean, note: str
   if (!req) return { error: "Request not found." };
   const to = approve ? "proof_approved" : "in_progress";
   if (!canTransition(req.status, to)) return { error: `Cannot ${approve ? "approve" : "return"} from "${req.status}".` };
-  await transition(db, req, to, p.id, approve ? "Proof approved — awaiting client confirmation" : `Changes requested: ${note}`);
+  if (!(await transition(db, req, to, p.id, approve ? "Proof approved — awaiting client confirmation" : `Changes requested: ${note}`))) return { error: RACED };
   await db.from("audit_log").insert({ actor_id: p.id, action: approve ? "approve_proof" : "request_proof_changes", target_id: req.id, detail: { note } });
   const { data: r3 } = await db.from("requests").select("client_id, assigned_buddy_id, title").eq("id", req.id).single();
   if (r3) {
@@ -142,6 +170,14 @@ export async function adjustBuddyPayout(requestId: string, newAmountNgn: number,
 
   const old = Number(req.buddy_payout_ngn ?? 0);
   if (amount === old) return { error: "That's the same as the current payout." };
+
+  // A payout figure only means something on a live task. Without this, the
+  // figure could be raised on a cancelled or refunded request and the
+  // accounting page would start reporting it as money owed.
+  const ADJUSTABLE = ["paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed", "paid_out"];
+  if (!ADJUSTABLE.includes(req.status)) {
+    return { error: `The payout cannot be adjusted on a "${req.status}" task.` };
+  }
 
   // Always update the stored payout figure.
   await db.from("requests").update({ buddy_payout_ngn: amount }).eq("id", requestId);
@@ -185,21 +221,34 @@ export async function releaseManualPayout(requestId: string) {  const p = await 
   const { data: req } = await db.from("requests")
     .select("id, status, assigned_buddy_id, buddy_payout_ngn").eq("id", requestId).single();
   if (!req) return { error: "Request not found." };
-  if (req.status !== "completed") return { error: `Payout only from "completed" (client-confirmed). Current: "${req.status}".` };
+  if (!isPayoutEligible(req.status)) return { error: `Payout only from "completed" (client-confirmed). Current: "${req.status}".` };
   if (!req.assigned_buddy_id || !req.buddy_payout_ngn) return { error: "No buddy/payout amount on this request." };
   const { data: bp } = await db.from("buddy_profiles")
     .select("bank_name, bank_account_number, bank_account_name").eq("id", req.assigned_buddy_id).single();
   const hasBank = Boolean(bp?.bank_account_number);
   const method = hasBank ? "bank transfer" : "manual (no bank on file — paid another way)";
 
-  const { error: poErr } = await db.from("payouts").insert({
+  // CLAIM THE REQUEST FIRST, then move money.
+  //
+  // The old order inserted the payout, released the hold, and only then moved
+  // the status. In that window a refund approval reading the same row saw
+  // funds still held and passed its own check, so the buddy was paid and the
+  // client refunded from one payment. Claiming the status first means exactly
+  // one of the two writers wins, and the loser finds the door shut.
+  if (!(await transition(db, req, "paid_out", p.id, `Buddy paid out (${method})`))) return { error: RACED };
+
+  const { data: po, error: poErr } = await db.from("payouts").insert({
     request_id: req.id, buddy_id: req.assigned_buddy_id, provider: "manual",
     provider_reference: `manual-payout-${req.id}`, amount_ngn: req.buddy_payout_ngn, status: "paid",
-  });
-  if (poErr) return { error: poErr.message.includes("duplicate") ? "Payout already recorded." : poErr.message };
-  await db.from("payments").update({ funds_held: false }).eq("request_id", req.id);
-  await db.from("transactions").insert({ kind: "payout", request_id: req.id, amount_ngn: -Number(req.buddy_payout_ngn), note: `Manual payout to buddy (${method})` });
-  await transition(db, req, "paid_out", p.id, `Buddy paid out (${method})`);
+  }).select("id").single();
+  if (poErr) {
+    // Give the claim back so the task is not stranded in paid_out with no payout.
+    await db.from("requests").update({ status: "completed" }).eq("id", req.id).eq("status", "paid_out");
+    req.status = "completed";
+    return { error: poErr.message.includes("duplicate") ? "Payout already recorded." : poErr.message };
+  }
+  await db.from("payments").update({ funds_held: false }).eq("request_id", req.id).eq("status", "succeeded");
+  await db.from("transactions").insert({ kind: "payout", request_id: req.id, payout_id: po?.id ?? null, amount_ngn: -Number(req.buddy_payout_ngn), note: `Manual payout to buddy (${method})` });
   await db.from("audit_log").insert({ actor_id: p.id, action: "release_manual_payout", target_id: req.id, detail: { amount_ngn: req.buddy_payout_ngn, bank: bp, hasBank } });
   await notify(req.assigned_buddy_id, "You have been paid", "Your payout has been sent to your bank account.", "/buddy/earnings");
   revalidatePath("/admin/payouts"); revalidatePath(`/admin/requests/${req.id}`);

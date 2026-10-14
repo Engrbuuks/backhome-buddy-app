@@ -38,8 +38,8 @@ export default function NewRequestForm({ services, regions, recipients = [], zon
       }
     } else {
       priceHint = isUrgent
-        ? "Priced per task with a priority surcharge for urgent handling — reflected in your free quote (within 6 hours for urgent requests)."
-        : "Priced per task — you'll get a free, detailed quote within 24 hours.";
+        ? "Priced per task with a priority surcharge for urgent handling — reflected in your free quote (we aim to quote urgent requests within 6 hours)."
+        : "Priced per task — you'll get a free, detailed quote, usually within 24 hours.";
     }
   }
 
@@ -81,7 +81,7 @@ export default function NewRequestForm({ services, regions, recipients = [], zon
             <option value="standard">Standard</option>
             <option value="urgent">Urgent — needs to start within 24–48 hours</option>
           </SelectField>
-          <p className="mt-1 text-xs text-bbb-slate">Urgent tasks jump the queue, are quoted within 6 hours, and carry a priority surcharge.</p>
+          <p className="mt-1 text-xs text-bbb-slate">Urgent tasks jump the queue, are quoted first, usually within 6 hours, and carry a priority surcharge.</p>
         </div>
         {recipients.length > 0 && (
           <SelectField label="Use a saved recipient" onChange={(e) => { const r = recipients.find((x) => x.id === e.target.value); if (r) setRec({ name: r.name ?? "", phone: r.phone ?? "", address: r.address ?? "" }); }}>

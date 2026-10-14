@@ -8,8 +8,31 @@ async function admin() {
   return p && p.role === "admin" ? p : null;
 }
 
+/**
+ * Who may look at one request: the admin, the client who owns it, or the buddy
+ * currently assigned to it. Nobody else, and never an anonymous caller.
+ *
+ * This exists because milestone data carries signed links to the buddy's proof
+ * photographs — the inside of a client's family home, their documents, their
+ * relatives. src/lib/storage/sign.ts says in its header to call it only after
+ * access has been verified. This is that verification.
+ */
+async function mayViewRequest(requestId: string): Promise<boolean> {
+  const p = await getCurrentProfile();
+  if (!p || !requestId) return false;
+  if (p.role === "admin") return true;
+  const db = createAdminClient();
+  const { data: req } = await db
+    .from("requests").select("client_id, assigned_buddy_id").eq("id", requestId).maybeSingle();
+  if (!req) return false;
+  return req.client_id === p.id || (req as any).assigned_buddy_id === p.id;
+}
+
 // ---------- Service-type templates ----------
+/** The per-service step templates are the internal operating playbook, so this
+ *  is admin only. Its only caller is the admin milestones screen. */
 export async function listServiceMilestones(serviceTypeId: string) {
+  if (!(await admin())) return [];
   try {
     const db = createAdminClient();
     const { data, error } = await db.from("service_milestones").select("*").eq("service_type_id", serviceTypeId).order("sort_order");
@@ -37,6 +60,7 @@ export async function saveServiceMilestones(serviceTypeId: string, milestones: A
 
 // ---------- Per-request milestones ----------
 export async function getRequestMilestones(requestId: string) {
+  if (!(await mayViewRequest(requestId))) return [];
   try {
     const db = createAdminClient();
     const { data, error } = await db.from("request_milestones").select("*").eq("request_id", requestId).order("sort_order");
@@ -69,25 +93,9 @@ export async function getRequestMilestones(requestId: string) {
   }
 }
 
-/** Copy a service type's template milestones onto a request (once). Called at
- *  assignment; no-op if the request already has milestones. */
-export async function seedRequestMilestones(requestId: string) {
-  try {
-    const db = createAdminClient();
-    const { count, error: cErr } = await db.from("request_milestones").select("id", { count: "exact", head: true }).eq("request_id", requestId);
-    if (cErr) return { error: "" }; // table missing (migration not run) — skip quietly
-    if ((count ?? 0) > 0) return { error: "" };
-    const { data: req } = await db.from("requests").select("service_type_id").eq("id", requestId).maybeSingle();
-    if (!(req as any)?.service_type_id) return { error: "" };
-    const { data: tmpl } = await db.from("service_milestones").select("title, hint, sort_order").eq("service_type_id", (req as any).service_type_id).order("sort_order");
-    if (!tmpl?.length) return { error: "" };
-    const rows = tmpl.map((t: any) => ({ request_id: requestId, title: t.title, hint: t.hint, sort_order: t.sort_order }));
-    await db.from("request_milestones").insert(rows);
-    return { error: "" };
-  } catch {
-    return { error: "" };
-  }
-}
+// seedRequestMilestones moved to ./milestone-engine.ts — it takes a request id
+// and writes rows, with no way to know whether the caller owns that request,
+// so it must not be an exported action. Server callers import it from there.
 
 /** Admin edits the per-request milestone list (tweak the template for this task). */
 export async function saveRequestMilestones(requestId: string, milestones: Array<{ id?: string; title: string; hint?: string }>) {
@@ -130,6 +138,14 @@ export async function completeMilestone(requestId: string, milestoneId: string, 
   const note = (input.note || "").trim();
   if (!note) return { error: "Add a short note describing this milestone." };
   if (!input.filePath) return { error: "Attach a photo or video for this milestone." };
+
+  // The milestone id is a second caller-supplied id and must belong to THIS
+  // request. Without this, a buddy assigned to task A could attach proof
+  // carrying task B's milestone id, and that image would then render on task
+  // B's client and admin pages.
+  const { data: ms } = await db
+    .from("request_milestones").select("id").eq("id", milestoneId).eq("request_id", requestId).maybeSingle();
+  if (!ms) return { error: "That milestone is not on this task." };
 
   const now = new Date().toISOString();
   // Insert the proof, linked to this milestone.

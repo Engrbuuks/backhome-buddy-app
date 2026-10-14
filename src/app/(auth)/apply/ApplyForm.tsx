@@ -99,7 +99,7 @@ export default function ApplyForm() {
       <AuthLayout eyebrow="Application received" title="Thank you for applying!" subtitle="What happens next:" sideTitle="Earn by helping the diaspora get things done.">
         <div className="space-y-3 rounded-2xl border border-bbb-border bg-white p-5 text-sm leading-7 text-bbb-slate">
           <p><span className="font-bold text-bbb-charcoal">1.</span> Confirm your email — we&apos;ve sent you a verification link.</p>
-          <p><span className="font-bold text-bbb-charcoal">2.</span> Our team reviews every application. If shortlisted, you&apos;ll complete verification in your portal — ID document, proof of address, two guarantors and a Police Character Certificate.</p>
+          <p><span className="font-bold text-bbb-charcoal">2.</span> Our team reviews every application. If shortlisted, you&apos;ll complete verification in your portal — ID document and NIN, proof of address, two guarantors and your payout bank account. A Police Character Certificate is welcome if you already have one, but it is not required.</p>
           <p><span className="font-bold text-bbb-charcoal">3.</span> After a short interview and training, you&apos;re activated and tasks appear in your portal.</p>
           <a href="/login" className="inline-block font-bold text-bbb-strong">Go to login →</a>
         </div>

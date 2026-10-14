@@ -29,9 +29,20 @@ export function canTransition(from: RequestStatus, to: RequestStatus): boolean {
 
 /**
  * Hard invariant: a buddy payout may only originate from a client-confirmed
- * COMPLETED request, or an explicit admin DISPUTED resolution. Never from held,
- * unconfirmed funds. Callers enforcing payouts must check this.
+ * COMPLETED request. Never from held, unconfirmed funds.
+ *
+ * This used to also return true for `disputed`, and had zero call sites, so
+ * the "hard invariant" was a comment rather than a guard — and it disagreed
+ * with the only code that actually releases a payout, which checks for
+ * `completed` alone. The two have been reconciled in favour of the stricter
+ * one, and `releaseManualPayout` now calls this rather than repeating the
+ * string, so they cannot drift apart again.
+ *
+ * A dispute resolved in the buddy's favour still reaches payout: `resolveDispute`
+ * moves the request to `completed` first, which is the honest record of what
+ * happened. The `disputed -> paid_out` edge in ALLOWED_TRANSITIONS is kept for
+ * that historical path but no code writes it.
  */
 export function isPayoutEligible(status: RequestStatus): boolean {
-  return status === "completed" || status === "disputed";
+  return status === "completed";
 }

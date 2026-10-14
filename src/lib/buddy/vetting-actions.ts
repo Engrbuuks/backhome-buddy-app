@@ -118,7 +118,7 @@ export async function signNda(fullName: string) {
   }).eq("id", p.id);
   if (error) return { error: error.message };
   await db.from("audit_log").insert({ actor_id: p.id, action: "nda_signed", target_id: p.id, detail: { name, version: NDA_VERSION } });
-  revalidatePath("/buddy/verification");
+  revalidatePath("/buddy/vetting");
   return { error: "" };
 }
 

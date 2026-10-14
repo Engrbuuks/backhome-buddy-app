@@ -28,11 +28,12 @@ const REASON_LABEL = Object.fromEntries(REFUND_REASONS.map(([k, v]) => [k, v]));
 const STAGE_ORDER = ["paid", "assigned", "in_progress", "proof_ready", "proof_approved", "completed"];
 
 export default function RefundsQueue({
-  legacy = [], requests = [], awaitingTransfer = [], migrationMissing = false, policy,
+  legacy = [], requests = [], awaitingTransfer = [], held, migrationMissing = false, policy,
 }: {
   legacy?: any[];
   requests?: any[];
   awaitingTransfer?: any[];
+  held?: { rows: any[]; totalNgn: number };
   migrationMissing?: boolean;
   policy: RefundPolicy;
 }) {
@@ -158,9 +159,69 @@ export default function RefundsQueue({
         </div>
       )}
 
-      {/* 4 ------------------------------------------------- policy */}
+      {/* 4 -------------------------------------------- held funds */}
+      <HeldFunds held={held} />
+
+      {/* 5 ------------------------------------------------- policy */}
       <PolicyEditor policy={policy} onError={setError} />
     </AdminShell>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every naira currently sitting still.
+ *
+ * Nothing used to show this. A client pays, the buddy goes quiet, the client
+ * stops logging in, and the request sits in `assigned` with the money held,
+ * invisible to every queue, while the accounting page counts it as revenue.
+ * This is the list of obligations nobody was tracking.
+ */
+function HeldFunds({ held }: { held?: { rows: any[]; totalNgn: number } }) {
+  const rows = held?.rows ?? [];
+  const stalled = rows.filter((r) => r.stalled);
+
+  return (
+    <section className="mb-8 rounded-3xl border border-bbb-border bg-white p-5 shadow-soft">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-lg font-extrabold">Money you are currently holding</h2>
+        <span className="font-display text-lg font-extrabold">{formatNGN(held?.totalNgn ?? 0)}</span>
+      </div>
+      <p className="mt-1 text-sm text-bbb-slate">
+        Every task with a client&apos;s payment still held against it. The ones marked stuck have not moved in over
+        two weeks and are waiting on nobody, which usually means the client gave up and never asked.
+      </p>
+
+      {rows.length === 0 ? (
+        <p className="mt-3 rounded-xl bg-bbb-bg p-3 text-sm text-bbb-slate">Nothing is being held right now.</p>
+      ) : (
+        <div className="mt-3 space-y-1.5">
+          {rows.slice(0, 40).map((r) => (
+            <div key={r.request_id} className={`flex flex-wrap items-center justify-between gap-2 rounded-xl p-2.5 text-sm ${r.stalled ? "bg-amber-50" : "bg-bbb-bg"}`}>
+              <div className="min-w-0">
+                <a href={`/admin/requests/${r.request_id}`} className="truncate font-semibold hover:underline">{r.title}</a>
+                <p className="text-xs text-bbb-slate">
+                  {r.client_name} · {stageLabel(r.status)} · {r.days_since_moved} days since it last moved
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {r.stalled && <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-900">stuck</span>}
+                <span className="font-semibold">{formatNGN(r.amount_ngn)}</span>
+              </div>
+            </div>
+          ))}
+          {rows.length > 40 && <p className="text-xs text-bbb-slate">and {rows.length - 40} more.</p>}
+        </div>
+      )}
+
+      {stalled.length > 0 && (
+        <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+          {stalled.length} {stalled.length === 1 ? "task has" : "tasks have"} been stuck for over a fortnight. Each one
+          is somebody&apos;s money. Chase the buddy, refund the client, or close it out.
+        </p>
+      )}
+    </section>
   );
 }
 

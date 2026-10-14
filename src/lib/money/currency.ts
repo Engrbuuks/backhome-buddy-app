@@ -48,3 +48,29 @@ export function formatMoneyPdf(ngn: number, currency: Currency, rates: RateMap):
   const prefix: Record<Currency, string> = { USD: "$", GBP: "GBP ", EUR: "EUR ", CAD: "CAD ", NGN: "NGN " };
   return `${prefix[effective]}${num}`;
 }
+
+/**
+ * The rates a given request must be charged at.
+ *
+ * Once a quote has gone out, the client was shown a figure in their own
+ * currency. That figure is a promise, and it must not move when an admin
+ * updates the exchange rate the next morning: the client would transfer the
+ * new, smaller amount while the system went on recording the original naira
+ * price as paid in full.
+ *
+ * `fx_rates_snapshot` is written when the quote is sent (migration 0044).
+ * Requests quoted before that column existed have none, and fall back to live
+ * rates, which is the behaviour they already had.
+ */
+export function ratesForRequest(snapshot: unknown, live: RateMap): RateMap {
+  if (!snapshot || typeof snapshot !== "object") return live;
+  const snap = snapshot as Record<string, unknown>;
+  const out = { ...live } as RateMap;
+  let used = false;
+  for (const c of CURRENCIES) {
+    const v = Number(snap[c]);
+    if (Number.isFinite(v) && v > 0) { out[c] = v; used = true; }
+  }
+  out.NGN = 1;
+  return used ? out : live;
+}

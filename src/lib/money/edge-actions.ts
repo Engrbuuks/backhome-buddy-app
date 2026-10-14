@@ -5,10 +5,29 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 import { canTransition } from "@/lib/money/stateMachine";
 import { notify, notifyAdmins } from "@/lib/notifications/notify";
 
-async function move(db: any, req: any, to: string, actorId: string, note: string) {
-  await db.from("requests").update({ status: to, updated_at: new Date().toISOString() }).eq("id", req.id);
-  await db.from("request_timeline").insert({ request_id: req.id, from_status: req.status, to_status: to, actor_id: actorId, note });
+/**
+ * Move a request, but only if it is still where we read it.
+ *
+ * Same reasoning as `transition` in admin/workflow-actions.ts: a read followed
+ * by an unconditional write lets two admins both pass their checks and both
+ * write, so the same held payment can be paid out and refunded. Returns false
+ * when somebody else got there first, and writes no timeline row in that case.
+ */
+async function move(db: any, req: any, to: string, actorId: string, note: string): Promise<boolean> {
+  const from = req.status;
+  const { data: changed } = await db
+    .from("requests")
+    .update({ status: to, updated_at: new Date().toISOString() })
+    .eq("id", req.id)
+    .eq("status", from)
+    .select("id");
+  if (!changed || changed.length === 0) return false;
+  await db.from("request_timeline").insert({ request_id: req.id, from_status: from, to_status: to, actor_id: actorId, note });
+  req.status = to;
+  return true;
 }
+
+const RACED = "This request was changed by someone else a moment ago. Reload and try again.";
 
 /** Client cancels. submitted/quoted = clean; paid/assigned = cancelled, refund pending.
  *
@@ -25,7 +44,7 @@ export async function cancelRequest(requestId: string, reason?: string) {
   const refundPending = ["paid", "assigned"].includes(req.status);
   const why = String(reason || "").trim().slice(0, 300);
   const base = refundPending ? "Client cancelled — refund pending" : "Client cancelled";
-  await move(db, req, "cancelled", p.id, why ? `${base}: ${why}` : base);
+  if (!(await move(db, req, "cancelled", p.id, why ? `${base}: ${why}` : base))) return { error: RACED };
   if (refundPending) await notifyAdmins("Cancellation — refund pending", "A paid request was cancelled. Process the refund.", "/admin/refunds");
   revalidatePath(`/client/requests/${requestId}`);
   return { error: "" };
@@ -43,7 +62,7 @@ export async function raiseDispute(_prev: unknown, formData: FormData) {
   if (!req || req.client_id !== p.id) return { error: "Request not found." };
   if (!canTransition(req.status, "disputed")) return { error: `Cannot dispute from "${req.status}".` };
   await db.from("disputes").insert({ request_id: req.id, raised_by: p.id, reason });
-  await move(db, req, "disputed", p.id, "Client raised an issue");
+  if (!(await move(db, req, "disputed", p.id, "Client raised an issue"))) return { error: RACED };
   await notifyAdmins("Dispute raised", reason.slice(0, 140), "/admin/disputes");
   revalidatePath(`/client/requests/${requestId}`);
   return { error: "", saved: true };
@@ -92,7 +111,20 @@ export async function recordManualRefund(requestId: string, amountNgn?: number) 
   const partial = amount < paid;
   const retained = Math.round((paid - amount) * 100) / 100;
 
-  const { error: rErr } = await db.from("refunds").insert({
+  // CLAIM THE REQUEST FIRST, before any money row is written. If a payout
+  // release is happening in the same moment, exactly one of us wins the
+  // status, and the loser stops here having written nothing.
+  const fromStatus = req.status;
+  if (!(await move(db, req, "refunded", p.id, partial ? `Client partially refunded (manual transfer) — ${retained} retained` : "Client refunded (manual transfer)"))) {
+    return { error: RACED };
+  }
+
+  const giveBackClaim = async () => {
+    await db.from("requests").update({ status: fromStatus }).eq("id", req.id).eq("status", "refunded");
+    req.status = fromStatus;
+  };
+
+  const { data: refRow, error: rErr } = await db.from("refunds").insert({
     payment_id: pay.id, request_id: req.id, amount_ngn: amount,
     // The unsuffixed reference is kept for a full refund so the existing
     // "already recorded" guard still catches a double click. A partial gets a
@@ -100,12 +132,14 @@ export async function recordManualRefund(requestId: string, amountNgn?: number) 
     provider_reference: partial ? `manual-refund-${req.id}-p${Math.round(amount)}` : `manual-refund-${req.id}`,
     status: "succeeded",
     reason: partial ? `Partial refund (bank transfer) — ${retained} retained` : "Manual refund (bank transfer)",
-  });
-  if (rErr) return { error: rErr.message.includes("duplicate") ? "Refund already recorded." : rErr.message };
+  }).select("id").single();
+  if (rErr) {
+    await giveBackClaim();
+    return { error: rErr.message.includes("duplicate") ? "Refund already recorded." : rErr.message };
+  }
 
   await db.from("payments").update({ funds_held: false, status: partial ? "partial_refund" : "refunded" }).eq("id", pay.id);
-  await db.from("transactions").insert({ kind: "refund", request_id: req.id, amount_ngn: -amount, note: partial ? `Partial refund to client — ${retained} retained` : "Manual refund to client" });
-  await move(db, req, "refunded", p.id, partial ? `Client partially refunded (manual transfer) — ${retained} retained` : "Client refunded (manual transfer)");
+  await db.from("transactions").insert({ kind: "refund", request_id: req.id, payment_id: pay.id, refund_id: refRow?.id ?? null, amount_ngn: -amount, note: partial ? `Partial refund to client — ${retained} retained` : "Manual refund to client" });
   await db.from("audit_log").insert({ actor_id: p.id, action: "record_manual_refund", target_id: req.id, detail: { amount_ngn: amount, retained_ngn: retained, paid_ngn: paid, refund_request_id: approvedId } });
   const { data: r5 } = await db.from("requests").select("client_id").eq("id", req.id).single();
   if (r5) await notify(r5.client_id, "Refund sent", partial ? "Your refund has been sent to you." : "Your refund has been sent to you.", `/client/requests/${req.id}`);
@@ -127,10 +161,16 @@ export async function resolveDispute(disputeId: string, outcome: "refund" | "rel
     const r = await recordManualRefund(req.id);
     if (r.error) return r;
   } else if (outcome === "release") {
-    await db.from("requests").update({ status: "completed" }).eq("id", req.id); // make payout-eligible
+    // Conditional, and it sets updated_at: the old version wrote the status
+    // blind and left updated_at stale, so a dispute-released task sorted to
+    // the wrong end of the payout queue, which orders by that column.
+    const { data: ok } = await db.from("requests")
+      .update({ status: "completed", updated_at: new Date().toISOString() })
+      .eq("id", req.id).eq("status", "disputed").select("id");
+    if (!ok || ok.length === 0) return { error: RACED };
     await db.from("request_timeline").insert({ request_id: req.id, from_status: "disputed", to_status: "completed", actor_id: p.id, note: "Dispute resolved in buddy's favour — payout eligible" });
   } else {
-    await move(db, req, "in_progress", p.id, "Dispute resolved — work resumes");
+    if (!(await move(db, req, "in_progress", p.id, "Dispute resolved — work resumes"))) return { error: RACED };
   }
   await db.from("disputes").update({ status: "resolved", resolved_outcome: outcome, resolution: `Resolved: ${outcome}`, resolved_at: new Date().toISOString() }).eq("id", d.id);
   await db.from("audit_log").insert({ actor_id: p.id, action: "resolve_dispute", target_id: req.id, detail: { outcome } });

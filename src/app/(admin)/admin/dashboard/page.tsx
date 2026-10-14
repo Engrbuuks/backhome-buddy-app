@@ -3,6 +3,7 @@ import { AdminShell, PageHeader } from "@/components/AdminShell";
 import { StatusPill } from "@/components/StatusPill";
 import { formatNGN, formatDate } from "@/components/money";
 import { getDashboardStats } from "@/lib/admin/dashboard-actions";
+import { deploymentHealth } from "@/lib/admin/config-actions";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth/roles";
 import {
@@ -17,6 +18,19 @@ export default async function AdminDashboard() {
   if (!me || me.role !== "admin") redirect("/login");
   const s = await getDashboardStats();
   if (!s) redirect("/login");
+  const health = await deploymentHealth();
+
+  // Things that are switched off and say nothing about it. Each one looks like
+  // a working feature from the inside until somebody notices it never fired.
+  const OFF: { on: boolean | undefined; label: string; effect: string }[] = [
+    { on: health?.cron, label: "Scheduled jobs", effect: "CRON_SECRET is not set, so both scheduled jobs are rejected on every run. Tasks never auto-confirm and offers never expire." },
+    { on: health?.storage, label: "File storage", effect: "R2 is not configured, so buddies cannot upload proof at all." },
+    { on: health?.email, label: "Email", effect: "RESEND_API_KEY is not set. Clients and buddies get in-app notifications only, no email." },
+    { on: health?.bankCheck, label: "Bank account check", effect: "PAYSTACK_SECRET_KEY is not set, so payout accounts are never verified automatically." },
+    { on: health?.push, label: "Phone alerts", effect: "VAPID keys are not set, so buddies get no push notification for a new task." },
+    { on: health?.assistant, label: "Support assistant", effect: "No AI key set. Visitors are told the assistant is not configured." },
+    { on: health?.companyPhone, label: "Phone on quote PDFs", effect: "COMPANY_PHONE is not set, so quotes go out with no telephone number." },
+  ].filter((x) => health && x.on === false);
 
   // Action items — only show the ones that need attention (count > 0).
   const actions = [
@@ -40,6 +54,22 @@ export default async function AdminDashboard() {
   return (
     <AdminShell title="Dashboard">
       <PageHeader eyebrow="Operations" title="Dashboard" description="Everything that needs your attention, and the health of the business at a glance." />
+
+      {OFF.length > 0 && (
+        <section className="mb-5 rounded-3xl border-2 border-amber-300 bg-amber-50 p-5">
+          <h2 className="font-display text-base font-extrabold text-amber-900">
+            {OFF.length} {OFF.length === 1 ? "thing is" : "things are"} switched off and failing quietly
+          </h2>
+          <ul className="mt-2 space-y-1.5 text-sm text-amber-900">
+            {OFF.map((x) => (
+              <li key={x.label}><strong>{x.label}:</strong> {x.effect}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-amber-800">
+            Each is an environment variable in Vercel. Set it, redeploy, and this line disappears.
+          </p>
+        </section>
+      )}
 
       {/* ACTION NEEDED */}
       {actions.length > 0 && (

@@ -1,8 +1,21 @@
-"use server";
+/**
+ * SECURITY: no "use server" here, deliberately. This takes a request id and
+ * emails that client a PDF carrying their name, their prices and the company
+ * bank details. Exported from a "use server" file, an anonymous caller could
+ * mail any client a quote at will, and repeat it — confusing real customers
+ * with duplicate quotes that genuinely came from this domain.
+ *
+ * Its only callers are the admin quote actions, which have already checked
+ * the caller's role.
+ */
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getClientDisplay, getBankDetails } from "@/lib/money/fx";
 import { buildQuotePdf } from "@/lib/pdf/quote-pdf";
 import { sendEmailWithAttachments, notify } from "@/lib/notifications/notify";
+
+if (typeof window !== "undefined") {
+  throw new Error("admin/quote-email is server-only and must never reach the browser.");
+}
 
 /** Assemble the branded quote PDF for a request and email it to the client with
  *  the in-app link kept intact. Also creates the in-app notification. Reused by
@@ -10,7 +23,7 @@ import { sendEmailWithAttachments, notify } from "@/lib/notifications/notify";
 export async function emailBrandedQuote(requestId: string): Promise<{ error: string }> {
   const db = createAdminClient();
   const { data: req } = await db.from("requests")
-    .select("id, title, client_id, client_price_ngn, status, created_at, quote_items(label, amount_ngn), profiles!requests_client_id_fkey(full_name, email)")
+    .select("id, title, client_id, client_price_ngn, status, created_at, fx_rates_snapshot, quote_items(label, amount_ngn), profiles!requests_client_id_fkey(full_name, email)")
     .eq("id", requestId).maybeSingle();
   if (!req) return { error: "Request not found." };
   const clientEmail = (req as any).profiles?.email as string | undefined;
@@ -20,7 +33,10 @@ export async function emailBrandedQuote(requestId: string): Promise<{ error: str
   const totalNgn = Number((req as any).client_price_ngn) || items.reduce((s: number, i: any) => s + i.amountNgn, 0);
   if (!items.length || !(totalNgn > 0)) return { error: "This request has no quote to send yet." };
 
-  const [{ currency, rates }, banks] = await Promise.all([getClientDisplay((req as any).client_id), getBankDetails()]);
+  const [{ currency, rates: liveRates }, banks] = await Promise.all([getClientDisplay((req as any).client_id), getBankDetails()]);
+  // The PDF and the on-screen figure must agree, so both read the snapshot.
+  const { ratesForRequest } = await import("@/lib/money/currency");
+  const rates = ratesForRequest((req as any).fx_rates_snapshot, liveRates);
   const bank = banks[currency] || null;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://app.backhomebuddy.ng";
@@ -34,7 +50,9 @@ export async function emailBrandedQuote(requestId: string): Promise<{ error: str
       quoteNumber, date, clientName: clientName || "Client", clientEmail,
       requestTitle: (req as any).title || "Custom request",
       items, totalNgn, currency, rates, bank,
-      companyPhone: process.env.COMPANY_PHONE || "+234 810 123 4567",
+      // No invented fallback. A placeholder number printed on a real quote is
+      // worse than no number: the client rings it and reaches a stranger.
+      companyPhone: process.env.COMPANY_PHONE || "",
       companyEmail: process.env.COMPANY_EMAIL || "support@backhomebuddy.ng",
     });
   } catch (e) {

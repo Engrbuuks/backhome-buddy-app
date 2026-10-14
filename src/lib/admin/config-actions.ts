@@ -188,3 +188,26 @@ export async function setOfferMode(mode: "off" | "advisory" | "automatic") {
   revalidatePath("/admin/services");
   revalidatePath("/admin/requests");
 }
+
+/**
+ * Which pieces of the deployment are switched on.
+ *
+ * Every one of these fails SILENTLY when its environment variable is missing:
+ * no banner, no log entry, no error. CRON_SECRET is the worst — both scheduled
+ * jobs return 401 on every run, so tasks stop advancing to payout and offers
+ * stop expiring, and nothing anywhere says so. This turns each silence into a
+ * line on the dashboard.
+ */
+export async function deploymentHealth() {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return null;
+  return {
+    cron: Boolean(process.env.CRON_SECRET),
+    email: Boolean(process.env.RESEND_API_KEY),
+    push: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+    bankCheck: Boolean(process.env.PAYSTACK_SECRET_KEY),
+    storage: Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID),
+    assistant: Boolean(process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY),
+    companyPhone: Boolean(process.env.COMPANY_PHONE),
+  };
+}

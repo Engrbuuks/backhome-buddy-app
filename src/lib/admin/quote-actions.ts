@@ -97,8 +97,14 @@ export async function sendQuote(input: {
   );
   if (insErr) return { error: insErr.message };
   const lockedRate = await getUsdRate();
+  // Freeze EVERY currency's rate, not just USD. The old single fx_rate column
+  // was the dollar rate even for a client paying in pounds, so it could never
+  // have held the figure that client was actually shown.
+  const { getRates } = await import("@/lib/money/fx");
+  const lockedRates = await getRates().catch(() => null);
   const { error: upErr } = await db.from("requests").update({
     fx_rate: lockedRate,
+    fx_rates_snapshot: lockedRates,
     client_price_ngn: clientPrice,
     service_revenue_ngn: serviceRevenue,
     buddy_payout_ngn: payout,
@@ -165,8 +171,19 @@ export async function acceptCounterOffer(requestId: string) {
     return { error: "Can't accept — the client's price is at or below the buddy payout (margin would be negative). Re-quote instead." };
   }
 
+  // The discount comes out of margin, never out of real costs. Purchases are
+  // money already owed to somebody else; service revenue is what is left.
+  // Without this, service_revenue_ngn kept the old, higher figure and the
+  // accounting page overstated profit on this task forever.
+  const { data: items } = await db.from("quote_items").select("amount_ngn, item_type").eq("request_id", requestId);
+  const purchases = (items ?? [])
+    .filter((i: any) => (i.item_type || "service") === "purchase")
+    .reduce((sum: number, i: any) => sum + Number(i.amount_ngn || 0), 0);
+  const newServiceRevenue = Math.max(0, Math.round((newPrice - purchases) * 100) / 100);
+
   const { error } = await db.from("requests").update({
     client_price_ngn: newPrice,
+    service_revenue_ngn: newServiceRevenue,
     quote_decision: null,
     quote_decision_note: null,
     counter_amount_ngn: null,

@@ -124,6 +124,17 @@ export async function POST(req: NextRequest) {
  *  (booleans only — no secret values). Add ?selftest=1 to attempt a real
  *  Resend send to the FROM address itself, surfacing Resend's exact verdict. */
 export async function GET(req: NextRequest) {
+  // Admin only. This used to answer anybody: it reports which secrets the
+  // deployment can see, names the sending address, and with ?selftest=1 spends
+  // Resend quota on demand — a free denial-of-service against your own email.
+  // The other two diagnostics in this app (storage/selftest, quote/test-attachment)
+  // already gate on the admin role; this one was missed.
+  const { getCurrentProfile } = await import("@/lib/auth/roles");
+  const p = await getCurrentProfile().catch(() => null);
+  if (!p || p.role !== "admin") {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
   const report: Record<string, unknown> = {
     deployment_ok: true,
     SEND_EMAIL_HOOK_SECRET_configured: Boolean(process.env.SEND_EMAIL_HOOK_SECRET),

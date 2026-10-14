@@ -516,3 +516,67 @@ export async function saveRefundPolicy(next: unknown) {
   revalidatePath("/admin/refunds");
   return { error: "", policy: clean };
 }
+
+/* ------------------------------------------------------------------ *
+ * Held funds: the money that is sitting still
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every request still holding a client's money, oldest first.
+ *
+ * This exists because nothing surfaced them. Only two code paths ever set
+ * `funds_held` back to false, and the only screen that hunted for held money
+ * looked at cancelled requests alone. So a client who paid, had a buddy
+ * assigned, watched the buddy go quiet and then gave up left a request sitting
+ * in `assigned` with the money held — in no refund queue, no payout queue and
+ * no dispute queue, while the accounting page counted it as collected revenue
+ * indefinitely. Nobody was tracking the obligation.
+ *
+ * `stalled` marks the ones that have not moved in a fortnight and are not in a
+ * state that is waiting on a human decision elsewhere.
+ */
+export async function listHeldFunds() {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { rows: [], totalNgn: 0 };
+  const db = createAdminClient();
+
+  const { data: pays } = await db
+    .from("payments")
+    .select("id, request_id, amount_ngn, created_at")
+    .eq("funds_held", true)
+    .eq("status", "succeeded")
+    .limit(500);
+  if (!pays?.length) return { rows: [], totalNgn: 0 };
+
+  const ids = pays.map((x: any) => x.request_id);
+  const { data: reqs } = await db
+    .from("requests")
+    .select("id, title, status, updated_at, assigned_buddy_id, profiles!requests_client_id_fkey(full_name)")
+    .in("id", ids);
+  const byId = new Map((reqs ?? []).map((r: any) => [r.id, r]));
+
+  const now = Date.now();
+  const FORTNIGHT = 14 * 24 * 60 * 60 * 1000;
+  // Statuses that already sit in somebody's queue, so they are not "lost".
+  const QUEUED = ["cancelled", "disputed", "completed"];
+
+  const rows = pays
+    .map((pay: any) => {
+      const r: any = byId.get(pay.request_id);
+      const updated = r?.updated_at ? new Date(r.updated_at).getTime() : new Date(pay.created_at).getTime();
+      const days = Math.floor((now - updated) / (24 * 60 * 60 * 1000));
+      return {
+        request_id: pay.request_id,
+        amount_ngn: Number(pay.amount_ngn ?? 0),
+        title: r?.title ?? "(deleted request)",
+        status: r?.status ?? "unknown",
+        client_name: (Array.isArray(r?.profiles) ? r.profiles[0] : r?.profiles)?.full_name ?? "—",
+        days_since_moved: days,
+        stalled: now - updated > FORTNIGHT && !QUEUED.includes(r?.status),
+      };
+    })
+    .sort((a, b) => b.days_since_moved - a.days_since_moved);
+
+  const totalNgn = rows.reduce((sum, r) => sum + r.amount_ngn, 0);
+  return { rows, totalNgn };
+}

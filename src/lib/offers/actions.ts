@@ -44,7 +44,7 @@ export async function acceptOffer(offerId: string) {
     // Same follow-through as a manual assignment, so an accepted offer and an
     // admin assignment leave the request in an identical state.
     try {
-      const { seedRequestMilestones } = await import("@/lib/requests/milestone-actions");
+      const { seedRequestMilestones } = await import("@/lib/requests/milestone-engine");
       await seedRequestMilestones(requestId);
     } catch { /* non-fatal */ }
     const { data: r2 } = await db.from("requests").select("client_id, title").eq("id", requestId).maybeSingle();

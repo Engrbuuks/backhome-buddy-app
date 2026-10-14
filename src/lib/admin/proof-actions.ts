@@ -77,6 +77,25 @@ export async function deleteRequest(requestId: string) {
   if (!requestId) return { error: "Missing request." };
   const db = createAdminClient();
 
+  // Never delete a task that is still holding somebody's money.
+  //
+  // This used to check the role and nothing else. Deleting a paid task hard
+  // deleted its payments row and nulled the ledger line's request_id, leaving
+  // real money in the bank with no payment record, no refund route and a
+  // ledger entry that could not name the task, the client or the amount's
+  // origin. Refund or pay out first; then the task can go.
+  const { data: held } = await db
+    .from("payments")
+    .select("id, amount_ngn")
+    .eq("request_id", requestId)
+    .eq("funds_held", true)
+    .limit(1);
+  if (held && held.length) {
+    return {
+      error: `This task is still holding ₦${Number(held[0].amount_ngn ?? 0).toLocaleString()} of the client's money. Refund it or release the payout first, then delete.`,
+    };
+  }
+
   // 1) Remove proof files from storage first (before rows are gone).
   const { data: proofs } = await db.from("proofs").select("file_url").eq("request_id", requestId).not("file_url", "is", null);
   if (proofs?.length) {
@@ -108,8 +127,18 @@ export async function deleteRequest(requestId: string) {
     "quote_items", "extra_charges", "expectations", "recipients",
     "disputes", "payouts", "refunds", "payments", "proofs",
   ];
+  // Collect what actually failed instead of swallowing it. A bare catch here
+  // meant the admin always saw a clean delete while rows and files could be
+  // left behind, and a real permission or foreign key error was
+  // indistinguishable from a table that simply does not exist on this
+  // deployment.
+  const leftBehind: string[] = [];
   for (const t of childTables) {
-    try { await db.from(t).delete().eq("request_id", requestId); } catch { /* table may not exist */ }
+    try {
+      const { error: delErr } = await db.from(t).delete().eq("request_id", requestId);
+      // "does not exist" is expected on deployments missing an optional table.
+      if (delErr && !/does not exist|schema cache/i.test(delErr.message)) leftBehind.push(t);
+    } catch { leftBehind.push(t); }
   }
   // Ledger rows: detach rather than delete, to preserve financial history.
   try { await db.from("transactions").update({ request_id: null }).eq("request_id", requestId); } catch {}
@@ -120,8 +149,11 @@ export async function deleteRequest(requestId: string) {
   const { error } = await db.from("requests").delete().eq("id", requestId);
   if (error) return { error: `Could not delete: ${error.message}` };
 
-  await db.from("audit_log").insert({ actor_id: p.id, action: "delete_request", target_id: requestId, detail: {} });
+  await db.from("audit_log").insert({ actor_id: p.id, action: "delete_request", target_id: requestId, detail: { left_behind: leftBehind } });
   revalidatePath("/admin/requests"); revalidatePath("/admin");
+  if (leftBehind.length) {
+    return { error: `Task deleted, but these could not be cleared and may have left rows behind: ${leftBehind.join(", ")}.` };
+  }
   return { error: "" };
 }
 
