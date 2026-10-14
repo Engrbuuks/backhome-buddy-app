@@ -3,7 +3,12 @@ import React, { useEffect, useState } from "react";
 import { getPushPublicKey, savePushSubscription, sendTestPush } from "@/lib/notifications/push-actions";
 
 /**
- * Turns the site into something that can reach a buddy's phone.
+ * Turns the site into something that can reach a phone.
+ *
+ * Used by all three roles. A buddy misses paid work without it; an admin
+ * misses a refund request or a dispute sitting in a queue; a client misses
+ * the moment their proof arrives. The wording changes per role, the mechanism
+ * does not.
  *
  * Two steps, and they are separate on purpose. Installing to the home screen is
  * what makes notifications possible at all on iOS, and makes them reliable on
@@ -24,7 +29,17 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
   return out;
 }
 
-export default function PushSetup() {
+export default function PushSetup({
+  heading = "Do not miss a task",
+  blurb = "Tasks are offered to one buddy at a time, with a short window to accept. Set this up once and your phone will alert you even when the app is closed.",
+  onLabel = "Task alerts are on for this phone.",
+  unsupported = "This browser cannot show task alerts. Open Backhome Buddy in Chrome on your phone so you do not miss offers.",
+}: {
+  heading?: string;
+  blurb?: string;
+  onLabel?: string;
+  unsupported?: string;
+} = {}) {
   const [supported, setSupported] = useState(true);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [installed, setInstalled] = useState(false);
@@ -106,7 +121,7 @@ export default function PushSetup() {
   if (!supported) {
     return (
       <div className="mb-6 rounded-3xl border border-bbb-border bg-white p-5 text-sm text-bbb-slate shadow-soft">
-        This browser cannot show task alerts. Open Backhome Buddy in Chrome on your phone so you do not miss offers.
+        {unsupported}
       </div>
     );
   }
@@ -117,7 +132,7 @@ export default function PushSetup() {
   if (allSet && installed) {
     return (
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3">
-        <p className="text-sm font-semibold text-green-800">Task alerts are on for this phone.</p>
+        <p className="text-sm font-semibold text-green-800">{onLabel}</p>
         <button type="button" onClick={test} disabled={busy}
           className="text-xs font-bold text-green-800 underline disabled:opacity-50">
           Send me a test
@@ -129,11 +144,8 @@ export default function PushSetup() {
 
   return (
     <div className="mb-6 rounded-3xl border-2 border-bbb-strong/30 bg-white p-5 shadow-soft">
-      <h2 className="font-display text-base font-extrabold">Do not miss a task</h2>
-      <p className="mt-1 text-sm text-bbb-slate">
-        Tasks are offered to one buddy at a time, with a short window to accept. Set this up once and your phone
-        will alert you even when the app is closed.
-      </p>
+      <h2 className="font-display text-base font-extrabold">{heading}</h2>
+      <p className="mt-1 text-sm text-bbb-slate">{blurb}</p>
 
       <ol className="mt-4 space-y-3">
         <li className="flex items-start gap-3">

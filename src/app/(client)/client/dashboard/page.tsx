@@ -4,12 +4,19 @@ import { StatusPill } from "@/components/StatusPill";
 import { formatDate, formatClientMoneyIn } from "@/components/money";
 import { getMyDisplay } from "@/lib/money/fx";
 import CurrencyToggle from "@/components/CurrencyToggle";
+import PushSetup from "@/components/PushSetup";
 
 export default async function ClientDashboard() {
   const requests = await listMyRequests();
   const { currency, rates } = await getMyDisplay();
   return (
     <div>
+      <PushSetup
+        heading="Know the moment it is done"
+        blurb="Add Backhome Buddy to your home screen and allow notifications, and your phone will tell you when your quote is ready, when your buddy starts, and when the photos land — without you having to check."
+        onLabel="Alerts are on for this phone."
+        unsupported="This browser cannot show alerts. Open Backhome Buddy in Chrome on your phone to get them."
+      />
       <div className="mb-6 flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
         <div>
           <h1 className="font-display text-2xl font-extrabold">My Requests</h1>

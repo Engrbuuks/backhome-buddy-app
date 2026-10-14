@@ -161,16 +161,45 @@ export async function sendEmailWithAttachments(
   }
 }
 
-/** In-app notification + email for a single user. Optionally pass a `typeKey`
- *  to make it respect the admin notification settings (on/off, custom wording,
- *  recipient override). Without a typeKey it behaves as before (always sends). */
-export async function notify(userId: string, title: string, body: string, link?: string, typeKey?: string) {
+
+/**
+ * Push, as a side channel on every notification.
+ *
+ * Push used to be sent from exactly one place — the offer engine — so a buddy
+ * got a buzz for a new task and nobody got a buzz for anything else. An admin
+ * could subscribe their phone and still never hear about a refund request, a
+ * dispute, or a paid task waiting to be assigned, because the only channels
+ * that fired were in-app and email.
+ *
+ * Non-fatal by design: a notification that could not be pushed is still
+ * recorded in-app and still emailed. The phone buzzing is a convenience, never
+ * the record.
+ */
+async function pushAlso(userId: string, title: string, body: string, link?: string, typeKey?: string) {
+  try {
+    const { sendPushToUser, pushConfigured } = await import("@/lib/notifications/push");
+    if (!pushConfigured()) return;
+    await sendPushToUser(userId, { title, body, url: link || "/" }, { typeKey });
+  } catch (e) {
+    console.error("push failed:", e);
+  }
+}
+
+/** In-app notification + email + push for a single user. Optionally pass a
+ *  `typeKey` to make it respect the admin notification settings (on/off,
+ *  custom wording, recipient override). Pass `skipPush` where the caller sends
+ *  its own richer push, so the phone does not buzz twice for one event. */
+export async function notify(
+  userId: string, title: string, body: string, link?: string, typeKey?: string,
+  opts?: { skipPush?: boolean },
+) {
   if (typeKey) {
-    await notifyTyped({ typeKey, userId, subject: title, body, link });
+    await notifyTyped({ typeKey, userId, subject: title, body, link, skipPush: opts?.skipPush });
     return;
   }
   const db = createAdminClient();
   await db.from("notifications").insert({ user_id: userId, title, body, link: link ?? null });
+  if (!opts?.skipPush) await pushAlso(userId, title, body, link);
   const { data: p } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
   if (p?.email) await sendEmail(p.email, title, body, link);
 }
@@ -182,13 +211,17 @@ export async function notifyInApp(userId: string, title: string, body: string, l
   await db.from("notifications").insert({ user_id: userId, title, body, link: link ?? null });
 }
 
-/** In-app notification + email for every admin. */
+/** In-app notification + email + push for every admin.
+ *
+ *  This is the one that matters for running the business from a phone: new
+ *  requests, refund requests, disputes and cancellations all arrive here. */
 export async function notifyAdmins(title: string, body: string, link?: string) {
   const db = createAdminClient();
   const { data: admins } = await db.from("profiles").select("id, email").eq("role", "admin");
   if (!admins?.length) return;
   await db.from("notifications").insert(admins.map((a) => ({ user_id: a.id, title, body, link: link ?? null })));
   for (const a of admins) {
+    await pushAlso(a.id, title, body, link);
     if (a.email) await sendEmail(a.email, title, body, link);
   }
 }
@@ -203,6 +236,7 @@ export async function notifyTyped(opts: {
   subject?: string;         // fallback subject if no override configured
   body: string;
   link?: string;
+  skipPush?: boolean;       // caller is sending its own, richer push
 }) {
   const { getNotifSettings, defFor } = await import("@/lib/notifications/config");
   const settings = await getNotifSettings();
@@ -224,6 +258,12 @@ export async function notifyTyped(opts: {
   // fault as the missing negotiation email: the message never left, and nobody
   // could tell afterwards whether it had.
   if (!cfg.enabled && !essential) return;
+
+  // Push rides the same switch as email: a type turned off is off on every
+  // channel, and an essential type reaches the phone whatever the setting says.
+  if (opts.userId && def?.audience !== "team" && !opts.skipPush) {
+    await pushAlso(opts.userId, subject, body, opts.link, opts.typeKey);
+  }
 
   // Resolve recipient(s).
   let recipients: string[] = [];

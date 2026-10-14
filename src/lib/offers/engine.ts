@@ -220,7 +220,9 @@ export async function offerNext(db: any, requestId: string, actorId: string | nu
     ? `"${req.title ?? "A task"}" has been matched to you. Open the app to accept it.`
     : `"${req.title ?? "A task"}" is offered to you. You have ${mins} minutes to accept before it goes to the next buddy.`;
 
-  await notify(pick.id, offerTitle, offerBody, `/buddy/dashboard`, "task_assigned_buddy");
+  // skipPush: the richer, urgent, tagged push goes out just below. Without
+  // this the buddy would get two buzzes for one offer.
+  await notify(pick.id, offerTitle, offerBody, `/buddy/dashboard`, "task_assigned_buddy", { skipPush: true });
 
   // Push is the only channel that reaches a buddy who is not currently looking
   // at the site, which is most of them most of the time. Non-fatal: the offer

@@ -4,6 +4,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { formatNGN, formatDate } from "@/components/money";
 import { getDashboardStats } from "@/lib/admin/dashboard-actions";
 import { deploymentHealth } from "@/lib/admin/config-actions";
+import PushSetup from "@/components/PushSetup";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/lib/auth/roles";
 import {
@@ -54,6 +55,13 @@ export default async function AdminDashboard() {
   return (
     <AdminShell title="Dashboard">
       <PageHeader eyebrow="Operations" title="Dashboard" description="Everything that needs your attention, and the health of the business at a glance." />
+
+      <PushSetup
+        heading="Run this from your phone"
+        blurb="Add Backhome Buddy to your home screen and allow notifications, and your phone will alert you the moment a request is paid, a refund is asked for, a dispute is raised or proof needs reviewing — even with the app closed."
+        onLabel="Admin alerts are on for this phone."
+        unsupported="This browser cannot show alerts. Open the admin in Chrome on your phone to get them."
+      />
 
       {OFF.length > 0 && (
         <section className="mb-5 rounded-3xl border-2 border-amber-300 bg-amber-50 p-5">

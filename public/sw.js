@@ -1,7 +1,7 @@
 /* Backhome Buddy service worker.
  *
  * Deliberately minimal. Its ONE job is to be alive when the app is closed so a
- * pushed task offer can raise a notification on the phone. It does not cache
+ * pushed alert can raise a notification on the phone, for buddies, clients and admins alike. It does not cache
  * pages: this app is almost entirely live, per-user data behind a login, and a
  * stale cached dashboard showing an offer that expired an hour ago would be
  * worse than no cache at all.
@@ -48,7 +48,10 @@ self.addEventListener("push", (event) => {
  * rather than piling up new tabs. */
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || "/buddy/dashboard";
+  // Falls back to "/", which routes to the right dashboard for whoever is
+  // signed in. It used to fall back to /buddy/dashboard, which sent an admin
+  // or a client to a page that is not theirs.
+  const target = (event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
