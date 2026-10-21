@@ -11,7 +11,9 @@ import { deleteRequestsBulk } from "@/lib/admin/proof-actions";
 
 const STATUSES = ["All", "submitted", "quoted", "awaiting_pay", "paid", "assigned", "in_progress", "proof_ready", "completed", "cancelled", "disputed"];
 
-export default function RequestsQueue({ initial }: { initial: any[] }) {
+/** `pager` renders inside the shell; as a sibling it landed outside the
+ *  sidebar and main column. Same fault as the buddies page had. */
+export default function RequestsQueue({ initial, pager }: { initial: any[]; pager?: React.ReactNode }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
@@ -133,6 +135,7 @@ export default function RequestsQueue({ initial }: { initial: any[] }) {
           })}
         </div>
       )}
+      {pager}
     </AdminShell>
   );
 }

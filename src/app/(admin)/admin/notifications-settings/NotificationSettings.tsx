@@ -8,7 +8,9 @@ type Cfg = { enabled: boolean; subject?: string; body?: string; recipientOverrid
 type Def = { key: string; label: string; audience: string; essential: boolean; group: string; defaultSubject: string };
 type Settings = { types: Record<string, Cfg>; teamEmails: string[]; fromAddress?: string; replyTo?: string };
 
-export default function NotificationSettings({ initialSettings, defs }: { initialSettings: Settings; defs: Def[] }) {
+/** `log` renders inside the shell. As a sibling in page.tsx it landed outside
+ *  the sidebar and main column, across the top of the screen. */
+export default function NotificationSettings({ initialSettings, defs, log }: { initialSettings: Settings; defs: Def[]; log?: React.ReactNode }) {
   const [s, setS] = useState<Settings>(initialSettings);
   const [open, setOpen] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -166,6 +168,8 @@ export default function NotificationSettings({ initialSettings, defs }: { initia
           </div>
         </div>
       ))}
+
+      {log}
 
       {/* Save bar */}
       <div className="sticky bottom-4 rounded-2xl border border-bbb-border bg-white p-3 shadow-soft">

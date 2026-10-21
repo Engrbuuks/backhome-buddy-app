@@ -8,9 +8,9 @@ export default async function RequestsQueuePage({ searchParams }: { searchParams
   const page = Math.max(1, parseInt(searchParams?.page || "1", 10) || 1);
   const { rows, total } = await listAllRequests(page, PAGE_SIZE);
   return (
-    <>
-      <RequestsQueue initial={rows} />
-      <Pager page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/requests" />
-    </>
+    <RequestsQueue
+      initial={rows}
+      pager={<Pager page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/requests" />}
+    />
   );
 }

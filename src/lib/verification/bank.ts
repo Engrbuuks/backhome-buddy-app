@@ -209,7 +209,10 @@ function bankKey(raw: string): string {
   return (raw || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, " ")
-    .replace(/\b(BANK|PLC|LTD|LIMITED|NIGERIA|NIG|OF|AND)\b/g, " ")
+    // FOR is here because Paystack writes "United Bank For Africa" while
+    // people type "United Bank of Africa". Without it the two normalise
+    // differently and UBA never matches.
+    .replace(/\b(BANK|PLC|LTD|LIMITED|NIGERIA|NIG|OF|FOR|AND|THE)\b/g, " ")
     .replace(/\s+/g, "")
     .trim();
 }
@@ -228,8 +231,9 @@ const ALIASES: Record<string, string> = {
   FIRST: "FIRST",
   FIRSTBANK: "FIRST",
   FBN: "FIRST",
-  UBA: "UNITEDFORAFRICA",
-  UNITEDBANKFORAFRICA: "UNITEDFORAFRICA",
+  UBA: "UNITEDAFRICA",
+  UNITEDBANKFORAFRICA: "UNITEDAFRICA",
+  UNITEDFORAFRICA: "UNITEDAFRICA",
   ZENITH: "ZENITH",
   ACCESS: "ACCESS",
   GTCO: "GUARANTYTRUST",
@@ -252,6 +256,10 @@ export type BackfillResult = {
   ran: boolean;
   reason: string;
   matched: number;
+  /** Every buddy that matched, and the bank they were matched to. A preview
+   *  that reports only a count asks the admin to approve work they cannot
+   *  see; this is the work. */
+  matches: { id: string; name: string; typed: string; bank: string }[];
   /** `candidates` is the list of banks that tied, so the admin can see WHY it
    *  refused rather than being told only that it did. */
   ambiguous: { id: string; name: string; bank: string; candidates: string[] }[];
@@ -324,7 +332,7 @@ function narrow(typed: string, key: string, candidates: Bank[]): { bank: Bank | 
  */
 export async function backfillBankCodes(dryRun = false): Promise<BackfillResult> {
   const empty = (reason: string): BackfillResult =>
-    ({ ran: false, reason, matched: 0, ambiguous: [], unmatched: [] });
+    ({ ran: false, reason, matched: 0, matches: [], ambiguous: [], unmatched: [] });
 
   if (!secret()) return empty("PAYSTACK_SECRET_KEY is not set, so the bank list cannot be fetched.");
 
@@ -346,9 +354,9 @@ export async function backfillBankCodes(dryRun = false): Promise<BackfillResult>
     .is("bank_code", null)
     .not("bank_name", "is", null);
 
+  const matches: BackfillResult["matches"] = [];
   const ambiguous: BackfillResult["ambiguous"] = [];
   const unmatched: BackfillResult["unmatched"] = [];
-  let matched = 0;
 
   for (const r of rows ?? []) {
     const who = ((Array.isArray((r as any).profiles) ? (r as any).profiles[0] : (r as any).profiles)?.full_name) || r.id;
@@ -375,12 +383,12 @@ export async function backfillBankCodes(dryRun = false): Promise<BackfillResult>
     }
 
     if (!dryRun) await db.from("buddy_profiles").update({ bank_code: bank.code, bank_name: bank.name }).eq("id", r.id);
-    matched++;
+    matches.push({ id: r.id, name: who, typed, bank: bank.name });
   }
 
   return {
     ran: true,
-    reason: dryRun ? "Preview only — nothing was saved." : "",
-    matched, ambiguous, unmatched,
+    reason: dryRun ? "Preview only — nothing has been saved yet." : "",
+    matched: matches.length, matches, ambiguous, unmatched,
   };
 }

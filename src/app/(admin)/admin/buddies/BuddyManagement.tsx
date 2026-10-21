@@ -346,7 +346,17 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
   );
 }
 
-export default function BuddyManagement({ buddies, missing }: { buddies: any[]; missing: any[] }) {
+/**
+ * `banner` and `pager` are rendered INSIDE the shell rather than beside it.
+ *
+ * This component owns the AdminShell, which draws the sidebar and the main
+ * column. Anything the page rendered as a sibling therefore landed outside
+ * that layout, stacked across the top of the whole screen with the menu
+ * pushed below it. Passing them in puts them where they belong.
+ */
+export default function BuddyManagement({ buddies, missing, banner, pager }: {
+  buddies: any[]; missing: any[]; banner?: React.ReactNode; pager?: React.ReactNode;
+}) {
   const [error, setError] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -358,7 +368,9 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
   return (
     <AdminShell title="Buddy Management">
       <PageHeader eyebrow="People" title="Buddy Management" description="Vet applications with the full checklist — ID, NIN, address, guarantors, PCC, interview, training. Approval unlocks only when every check is done." />
+      {banner}
       {error && <div className="mb-4"><ErrorState title="Action failed" message={error} /></div>}
+      <BankCodeBackfill />
 
       {missing.length > 0 && (
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -412,6 +424,7 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
           )}
         </>
       )}
+      {pager}
     </AdminShell>
   );
 }
@@ -491,7 +504,7 @@ function BankPicker({ buddyId, typed }: { buddyId: string; typed?: string | null
  * hand rather than guessed, because the wrong code resolves a real account
  * belonging to someone else.
  */
-export function BankCodeBackfill() {
+function BankCodeBackfill() {
   const [result, setResult] = React.useState<any>(null);
   const [err, setErr] = React.useState("");
   const [busy, start] = useTransition();
@@ -529,6 +542,16 @@ export function BankCodeBackfill() {
           <p className="font-semibold text-green-700">
             {result.matched} {result.matched === 1 ? "buddy" : "buddies"} matched{result.reason ? ` — ${result.reason}` : " and saved."}
           </p>
+          {result.matches?.length > 0 && (
+            <div className="rounded-xl bg-green-50 p-3 text-xs text-green-900">
+              <p className="font-bold">{result.reason ? "This is what it would do:" : "Matched:"}</p>
+              <ul className="mt-1 space-y-0.5">
+                {result.matches.map((x: any) => (
+                  <li key={x.id}>{x.name} — typed &ldquo;{x.typed}&rdquo; → <strong>{x.bank}</strong></li>
+                ))}
+              </ul>
+            </div>
+          )}
           {result.ambiguous.length > 0 && (
             <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
               <p className="font-bold">{result.ambiguous.length} could match more than one bank. Set these by hand below:</p>

@@ -12,11 +12,10 @@ export default async function Page() {
   const [data, deliveries] = await Promise.all([loadNotifSettings(), listRecentDeliveries()]);
   if (!data) redirect("/login");
   return (
-    <>
-      <NotificationSettings initialSettings={data.settings} defs={data.defs} />
-      <div className="mx-auto max-w-5xl px-4 pb-10">
-        <DeliveryLog data={deliveries} />
-      </div>
-    </>
+    <NotificationSettings
+      initialSettings={data.settings}
+      defs={data.defs}
+      log={<DeliveryLog data={deliveries} />}
+    />
   );
 }
