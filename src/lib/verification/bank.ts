@@ -197,3 +197,137 @@ export async function verifyBuddyBankAccount(
     return miss(e instanceof Error ? e.message : "The check could not be run.");
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Backfilling the bank code for buddies who registered before the
+ * Paystack key was set
+ * ------------------------------------------------------------------ */
+
+/** Strip everything that varies between how people write a bank's name:
+ *  case, punctuation, the words BANK, PLC, LIMITED, NIGERIA, and spaces. */
+function bankKey(raw: string): string {
+  return (raw || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .replace(/\b(BANK|PLC|LTD|LIMITED|NIGERIA|NIG|OF|AND)\b/g, " ")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+/** The handful of names Nigerians actually type, mapped to the bank's name
+ *  AS bankKey() normalises it — not as Paystack writes it. That distinction
+ *  matters: bankKey strips the words BANK, OF and AND, so Paystack's "United
+ *  Bank For Africa" normalises to UNITEDFORAFRICA, and an alias pointing at
+ *  UNITEDBANKFORAFRICA matches nothing at all. Caught by the unit tests.
+ *  Without these, "GTB" and "UBA" resolve to nobody. */
+const ALIASES: Record<string, string> = {
+  GTB: "GUARANTYTRUST",
+  GT: "GUARANTYTRUST",
+  GTBANK: "GUARANTYTRUST",
+  GUARANTYTRUSTBANK: "GUARANTYTRUST",
+  FIRST: "FIRST",
+  FIRSTBANK: "FIRST",
+  FBN: "FIRST",
+  UBA: "UNITEDFORAFRICA",
+  UNITEDBANKFORAFRICA: "UNITEDFORAFRICA",
+  ZENITH: "ZENITH",
+  ACCESS: "ACCESS",
+  GTCO: "GUARANTYTRUST",
+  STANBIC: "STANBICIBTC",
+  IBTC: "STANBICIBTC",
+  STANBICIBTC: "STANBICIBTC",
+  POLARIS: "POLARIS",
+  UNION: "UNION",
+  FIDELITY: "FIDELITY",
+  STERLING: "STERLING",
+  WEMA: "WEMA",
+  KUDA: "KUDA",
+  OPAY: "OPAY",
+  PALMPAY: "PALMPAY",
+  MONIEPOINT: "MONIEPOINT",
+  MONIEPOINTMFB: "MONIEPOINT",
+};
+
+export type BackfillResult = {
+  ran: boolean;
+  reason: string;
+  matched: number;
+  ambiguous: { id: string; name: string; bank: string }[];
+  unmatched: { id: string; name: string; bank: string }[];
+};
+
+/**
+ * Give every existing buddy the Paystack bank code their typed bank name implies.
+ *
+ * WHY THIS IS NEEDED
+ *
+ * The automated check resolves an account number against a numeric bank code.
+ * That code is only captured when the buddy picks their bank from a dropdown,
+ * and that dropdown only renders once PAYSTACK_SECRET_KEY is set. So every
+ * buddy who registered before the key was added typed their bank as free text
+ * and has no code. For them the check stops at "No bank selected" forever, and
+ * there is no screen where anyone can fix it.
+ *
+ * This reads each of those buddies' typed bank name, normalises it, and sets
+ * the code where exactly one bank matches. Anything ambiguous or unrecognised
+ * is reported rather than guessed, because writing the wrong code would
+ * resolve a real account belonging to the wrong person.
+ *
+ * Safe to run repeatedly: it only touches rows where bank_code is null.
+ */
+export async function backfillBankCodes(dryRun = false): Promise<BackfillResult> {
+  const empty = (reason: string): BackfillResult =>
+    ({ ran: false, reason, matched: 0, ambiguous: [], unmatched: [] });
+
+  if (!secret()) return empty("PAYSTACK_SECRET_KEY is not set, so the bank list cannot be fetched.");
+
+  const banks = await listNigerianBanks();
+  if (!banks.length) return empty("Paystack returned no bank list. Check the secret key.");
+
+  // Build a lookup from normalised name to the codes that share it. More than
+  // one code for a key means we must not guess.
+  const byKey = new Map<string, string[]>();
+  for (const b of banks) {
+    const k = bankKey(b.name);
+    if (!k) continue;
+    byKey.set(k, [...(byKey.get(k) ?? []), b.code]);
+  }
+
+  const db = createAdminClient();
+  const { data: rows } = await db
+    .from("buddy_profiles")
+    .select("id, bank_name, bank_account_number, profiles!buddy_profiles_id_fkey(full_name)")
+    .is("bank_code", null)
+    .not("bank_name", "is", null);
+
+  const ambiguous: BackfillResult["ambiguous"] = [];
+  const unmatched: BackfillResult["unmatched"] = [];
+  let matched = 0;
+
+  for (const r of rows ?? []) {
+    const who = ((Array.isArray((r as any).profiles) ? (r as any).profiles[0] : (r as any).profiles)?.full_name) || r.id;
+    const typed = String((r as any).bank_name || "");
+    const k = bankKey(typed);
+    const resolvedKey = ALIASES[k] ?? k;
+    let codes = byKey.get(resolvedKey);
+
+    // Fall back to a unique prefix match: "ZENITH" against "ZENITHBANK".
+    if (!codes && resolvedKey.length >= 4) {
+      const hits = [...byKey.entries()].filter(([key]) => key.startsWith(resolvedKey) || resolvedKey.startsWith(key));
+      if (hits.length === 1) codes = hits[0][1];
+      else if (hits.length > 1) { ambiguous.push({ id: r.id, name: who, bank: typed }); continue; }
+    }
+
+    if (!codes || codes.length === 0) { unmatched.push({ id: r.id, name: who, bank: typed }); continue; }
+    if (codes.length > 1) { ambiguous.push({ id: r.id, name: who, bank: typed }); continue; }
+
+    if (!dryRun) await db.from("buddy_profiles").update({ bank_code: codes[0] }).eq("id", r.id);
+    matched++;
+  }
+
+  return {
+    ran: true,
+    reason: dryRun ? "Preview only — nothing was saved." : "",
+    matched, ambiguous, unmatched,
+  };
+}

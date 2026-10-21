@@ -5,7 +5,7 @@ import CompetencyEditor from "@/components/CompetencyEditor";
 import InterviewLauncher from "@/components/InterviewLauncher";
 import { StatusPill, statusLabel } from "@/components/StatusPill";
 import { ErrorState } from "@/components/StateBlocks";
-import { runBankCheck } from "@/lib/verification/actions";
+import { runBankCheck, runBankCodeBackfill, setBuddyBankCode, getBankList } from "@/lib/verification/actions";
 import { setBuddyVetting, createBuddyProfileRow, updateVettingCheck, saveVettingNotes, requestBuddyDocuments, requestBuddyAction, setBuddyClearanceTier, setVettingCheckRequirement, getVettingOverrides } from "@/lib/admin/ops-actions";
 import { DeleteButton } from "@/components/DeleteButton";
 import { deleteUser } from "@/lib/admin/proof-actions";
@@ -181,6 +181,7 @@ function BuddyDetail({ b, pending, run }: { b: any; pending: boolean; run: (fn: 
               picked from the list so it can be looked up.
             </p>
           )}
+          {!b.bank_code && b.bank_account_number && <BankPicker buddyId={b.id} typed={b.bank_name} />}
         </div>
 
         <div className="rounded-2xl bg-bbb-bg p-4">
@@ -412,5 +413,140 @@ export default function BuddyManagement({ buddies, missing }: { buddies: any[]; 
         </>
       )}
     </AdminShell>
+  );
+}
+
+/**
+ * Set one buddy's bank by hand.
+ *
+ * Shown only where a buddy has an account number but no bank code — which is
+ * every buddy who registered before PAYSTACK_SECRET_KEY was set, because the
+ * dropdown they would have picked from does not render without it. Until the
+ * code is set, the automated check stops at "No bank selected" and there was
+ * nowhere in the admin to fix that.
+ *
+ * Saving also runs the check, since the missing bank was the only thing
+ * standing in its way.
+ */
+function BankPicker({ buddyId, typed }: { buddyId: string; typed?: string | null }) {
+  const [banks, setBanks] = React.useState<{ name: string; code: string }[]>([]);
+  const [code, setCode] = React.useState("");
+  const [msg, setMsg] = React.useState("");
+  const [err, setErr] = React.useState("");
+  const [busy, start] = useTransition();
+
+  React.useEffect(() => { getBankList().then((b) => setBanks(b as any)).catch(() => {}); }, []);
+
+  if (!banks.length) {
+    return (
+      <p className="mt-2 rounded-xl bg-amber-50 p-2.5 text-xs leading-5 text-amber-900">
+        No bank on file for the lookup{typed ? <> (they typed &ldquo;{typed}&rdquo;)</> : null}. The bank list is
+        unavailable, so set PAYSTACK_SECRET_KEY in Vercel and redeploy before this can be fixed.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded-xl bg-amber-50 p-2.5">
+      <p className="text-xs leading-5 text-amber-900">
+        This buddy registered before the bank list existed, so there is no bank to look their account up against
+        {typed ? <> — they typed &ldquo;<strong>{typed}</strong>&rdquo;</> : null}. Pick it and the check runs.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <select
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          className="h-9 min-w-[200px] flex-1 rounded-lg border border-bbb-border bg-white px-2 text-xs"
+        >
+          <option value="">Select the bank…</option>
+          {banks.map((bk) => <option key={bk.code} value={bk.code}>{bk.name}</option>)}
+        </select>
+        <button
+          type="button"
+          disabled={busy || !code}
+          onClick={() => start(async () => {
+            setErr(""); setMsg("");
+            const r = await setBuddyBankCode(buddyId, code);
+            if (r?.error) { setErr(r.error); return; }
+            const out = (r as any)?.result;
+            setMsg(out?.ran ? `Checked: ${out.outcome} — the bank holds "${out.bankName}".` : `Saved. ${out?.reason ?? ""}`);
+          })}
+          className="h-9 rounded-lg bg-bbb-strong px-3 text-xs font-bold text-white disabled:opacity-50"
+        >
+          Save and check
+        </button>
+      </div>
+      {err && <p className="mt-1.5 text-xs font-semibold text-red-600">{err}</p>}
+      {msg && <p className="mt-1.5 text-xs font-semibold text-green-700">{msg}</p>}
+    </div>
+  );
+}
+
+/**
+ * One button that fixes most of them at once.
+ *
+ * Reads every buddy's typed bank name, normalises it ("GTB", "GTBank",
+ * "Guaranty Trust Bank Plc" are all one bank) and fills in the code where
+ * exactly one bank matches. Anything ambiguous is listed for you to set by
+ * hand rather than guessed, because the wrong code resolves a real account
+ * belonging to someone else.
+ */
+export function BankCodeBackfill() {
+  const [result, setResult] = React.useState<any>(null);
+  const [err, setErr] = React.useState("");
+  const [busy, start] = useTransition();
+
+  const go = (dryRun: boolean) => start(async () => {
+    setErr(""); setResult(null);
+    const r = await runBankCodeBackfill(dryRun);
+    if (!r) { setErr("Not authorized."); return; }
+    if (!r.ran) { setErr(r.reason); return; }
+    setResult(r);
+  });
+
+  return (
+    <section className="mb-4 rounded-2xl border border-bbb-border bg-white p-4 shadow-soft">
+      <h2 className="font-display text-base font-extrabold">Verify the buddies you already have</h2>
+      <p className="mt-1 text-sm text-bbb-slate">
+        Buddies who registered before the Paystack key was set typed their bank name as free text, so there is no
+        bank code to look their account up against and the automatic check never runs for them. This matches those
+        names to the real bank list and fills in the code. It only touches buddies who have none, so it is safe to
+        run more than once.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => go(true)}
+          className="h-10 rounded-xl border border-bbb-border px-4 text-sm font-bold text-bbb-slate disabled:opacity-50">
+          Preview
+        </button>
+        <button type="button" disabled={busy} onClick={() => go(false)}
+          className="h-10 rounded-xl bg-bbb-strong px-4 text-sm font-bold text-white disabled:opacity-50">
+          {busy ? "Working…" : "Match and save"}
+        </button>
+      </div>
+      {err && <p className="mt-2 text-sm font-semibold text-red-600">{err}</p>}
+      {result && (
+        <div className="mt-3 space-y-2 text-sm">
+          <p className="font-semibold text-green-700">
+            {result.matched} {result.matched === 1 ? "buddy" : "buddies"} matched{result.reason ? ` — ${result.reason}` : " and saved."}
+          </p>
+          {result.ambiguous.length > 0 && (
+            <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-bold">{result.ambiguous.length} could match more than one bank. Set these by hand below:</p>
+              <ul className="mt-1 space-y-0.5">
+                {result.ambiguous.map((x: any) => <li key={x.id}>{x.name} — typed &ldquo;{x.bank}&rdquo;</li>)}
+              </ul>
+            </div>
+          )}
+          {result.unmatched.length > 0 && (
+            <div className="rounded-xl bg-bbb-bg p-3 text-xs text-bbb-slate">
+              <p className="font-bold">{result.unmatched.length} could not be recognised. Set these by hand below:</p>
+              <ul className="mt-1 space-y-0.5">
+                {result.unmatched.map((x: any) => <li key={x.id}>{x.name} — typed &ldquo;{x.bank}&rdquo;</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

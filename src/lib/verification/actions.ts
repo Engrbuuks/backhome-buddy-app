@@ -48,3 +48,52 @@ export async function bankCheckAvailable() {
   const { bankCheckConfigured } = await import("@/lib/verification/bank");
   return bankCheckConfigured();
 }
+
+/**
+ * Admin: give existing buddies the bank code their typed bank name implies,
+ * then they can be verified like anyone who registered after the key was set.
+ * Pass dryRun to see what it would do without writing anything.
+ */
+export async function runBankCodeBackfill(dryRun = false) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return null;
+  const { backfillBankCodes } = await import("@/lib/verification/bank");
+  const r = await backfillBankCodes(dryRun);
+  if (!dryRun) revalidatePath("/admin/buddies");
+  return r;
+}
+
+/**
+ * Admin sets one buddy's bank by hand, for the ones the backfill could not
+ * place. Takes a code from the Paystack list, never a free-text name, so an
+ * unresolvable value cannot be stored.
+ */
+export async function setBuddyBankCode(buddyId: string, bankCode: string) {
+  const p = await getCurrentProfile();
+  if (!p || p.role !== "admin") return { error: "Not authorized." };
+  if (!buddyId || !bankCode) return { error: "Pick a bank." };
+
+  const { listNigerianBanks, verifyBuddyBankAccount } = await import("@/lib/verification/bank");
+  const banks = await listNigerianBanks();
+  const bank = banks.find((b) => b.code === bankCode);
+  if (!bank) return { error: "That bank is not in Paystack's list." };
+
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const db = createAdminClient();
+  const { error } = await db
+    .from("buddy_profiles")
+    .update({ bank_code: bank.code, bank_name: bank.name })
+    .eq("id", buddyId);
+  if (error) return { error: error.message };
+
+  await db.from("audit_log").insert({
+    actor_id: p.id, action: "set_buddy_bank_code", target_id: buddyId,
+    detail: { bank_code: bank.code, bank_name: bank.name },
+  });
+
+  // Run the check straight away: setting the bank is the only thing that was
+  // standing between this buddy and an automatic verification.
+  const r = await verifyBuddyBankAccount(buddyId, p.id);
+  revalidatePath("/admin/buddies");
+  return { error: "", result: r };
+}

@@ -1,5 +1,5 @@
 import { listBuddies, listBuddyProfilesMissing } from "@/lib/admin/ops-actions";
-import BuddyManagement from "./BuddyManagement";
+import BuddyManagement, { BankCodeBackfill } from "./BuddyManagement";
 import { Pager } from "@/components/Pager";
 import MarkNotificationsRead from "@/components/MarkNotificationsRead";
 
@@ -20,11 +20,11 @@ export default async function BuddiesPage({ searchParams }: { searchParams?: { p
           <p className="mt-1 text-sm text-amber-800">
             Trust tiers, buddy clearance, the availability switch and the automated bank account check
             will not work until the outstanding migrations are run in Supabase. Run
-            <strong> 0038</strong>, <strong>0039</strong>, <strong>0040</strong> and <strong>0041</strong>,
-            in that order. All are safe to re-run.
+            <strong> 0038</strong> through <strong>0044</strong>, in order. All are safe to re-run.
           </p>
         </div>
       )}
+      <BankCodeBackfill />
       <BuddyManagement buddies={buddies} missing={missing} />
       <Pager page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/buddies" />
     </>
