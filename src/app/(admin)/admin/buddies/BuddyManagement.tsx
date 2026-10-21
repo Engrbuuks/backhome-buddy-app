@@ -533,7 +533,12 @@ export function BankCodeBackfill() {
             <div className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
               <p className="font-bold">{result.ambiguous.length} could match more than one bank. Set these by hand below:</p>
               <ul className="mt-1 space-y-0.5">
-                {result.ambiguous.map((x: any) => <li key={x.id}>{x.name} — typed &ldquo;{x.bank}&rdquo;</li>)}
+                {result.ambiguous.map((x: any) => (
+                  <li key={x.id}>
+                    {x.name} — typed &ldquo;{x.bank}&rdquo;
+                    {x.candidates?.length ? <> · could be {x.candidates.join(" or ")}</> : null}
+                  </li>
+                ))}
               </ul>
             </div>
           )}

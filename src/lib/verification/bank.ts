@@ -252,9 +252,56 @@ export type BackfillResult = {
   ran: boolean;
   reason: string;
   matched: number;
-  ambiguous: { id: string; name: string; bank: string }[];
+  /** `candidates` is the list of banks that tied, so the admin can see WHY it
+   *  refused rather than being told only that it did. */
+  ambiguous: { id: string; name: string; bank: string; candidates: string[] }[];
   unmatched: { id: string; name: string; bank: string }[];
 };
+
+/** Words that mark a different KIND of institution. A buddy who typed
+ *  "Zenith Bank" did not mean a microfinance bank that happens to share the
+ *  name, so candidates carrying these are dropped unless the buddy used one. */
+const INSTITUTION_WORDS = ["MICROFINANCE", "MFB", "MORTGAGE", "MERCHANT", "NONINTEREST", "BUREAU"];
+
+function hasInstitutionWord(raw: string): boolean {
+  const u = (raw || "").toUpperCase().replace(/[^A-Z]+/g, "");
+  return INSTITUTION_WORDS.some((w) => u.includes(w));
+}
+
+/**
+ * Narrow a tie down to one bank, or give up honestly.
+ *
+ * Tried in order of how much evidence each rule carries, strongest first. A
+ * rule only applies if it leaves exactly one candidate; otherwise the next is
+ * tried, and if none of them settle it the tie is reported with the names.
+ */
+function narrow(typed: string, key: string, candidates: Bank[]): { bank: Bank | null; tied: Bank[] } {
+  // Several list entries that are really the same bank are not a tie at all.
+  const byCode = new Map(candidates.map((b) => [b.code, b]));
+  let pool = [...byCode.values()];
+  if (pool.length === 1) return { bank: pool[0], tied: [] };
+
+  // 1. The typed name IS one of the bank names, give or take spacing and case.
+  const squash = (x: string) => x.toUpperCase().replace(/\s+/g, " ").trim();
+  const exact = pool.filter((b) => squash(b.name) === squash(typed));
+  if (exact.length === 1) return { bank: exact[0], tied: [] };
+
+  // 2. Equal normalised names beat ones that merely share a prefix: "ZENITH"
+  //    should not be dragged into a tie by "ZENITH SOMETHING ELSE".
+  const equal = pool.filter((b) => bankKey(b.name) === key);
+  if (equal.length === 1) return { bank: equal[0], tied: [] };
+  if (equal.length > 1) pool = equal;
+
+  // 3. A plain bank beats a microfinance or mortgage bank of the same name,
+  //    unless the buddy actually wrote one of those words.
+  if (!hasInstitutionWord(typed)) {
+    const plain = pool.filter((b) => !hasInstitutionWord(b.name));
+    if (plain.length === 1) return { bank: plain[0], tied: [] };
+    if (plain.length > 1) pool = plain;
+  }
+
+  return { bank: null, tied: pool };
+}
 
 /**
  * Give every existing buddy the Paystack bank code their typed bank name implies.
@@ -284,13 +331,12 @@ export async function backfillBankCodes(dryRun = false): Promise<BackfillResult>
   const banks = await listNigerianBanks();
   if (!banks.length) return empty("Paystack returned no bank list. Check the secret key.");
 
-  // Build a lookup from normalised name to the codes that share it. More than
-  // one code for a key means we must not guess.
-  const byKey = new Map<string, string[]>();
+  // Keep the whole bank, not just the code: narrowing a tie needs the names.
+  const byKey = new Map<string, Bank[]>();
   for (const b of banks) {
     const k = bankKey(b.name);
     if (!k) continue;
-    byKey.set(k, [...(byKey.get(k) ?? []), b.code]);
+    byKey.set(k, [...(byKey.get(k) ?? []), b]);
   }
 
   const db = createAdminClient();
@@ -309,19 +355,26 @@ export async function backfillBankCodes(dryRun = false): Promise<BackfillResult>
     const typed = String((r as any).bank_name || "");
     const k = bankKey(typed);
     const resolvedKey = ALIASES[k] ?? k;
-    let codes = byKey.get(resolvedKey);
 
-    // Fall back to a unique prefix match: "ZENITH" against "ZENITHBANK".
-    if (!codes && resolvedKey.length >= 4) {
-      const hits = [...byKey.entries()].filter(([key]) => key.startsWith(resolvedKey) || resolvedKey.startsWith(key));
-      if (hits.length === 1) codes = hits[0][1];
-      else if (hits.length > 1) { ambiguous.push({ id: r.id, name: who, bank: typed }); continue; }
+    // Gather every plausible bank: the exact normalised name first, then
+    // anything sharing a prefix either way ("ZENITH" against "ZENITHBANK").
+    const candidates: Bank[] = [...(byKey.get(resolvedKey) ?? [])];
+    if (resolvedKey.length >= 4) {
+      for (const [key, list] of byKey.entries()) {
+        if (key === resolvedKey) continue;
+        if (key.startsWith(resolvedKey) || resolvedKey.startsWith(key)) candidates.push(...list);
+      }
     }
 
-    if (!codes || codes.length === 0) { unmatched.push({ id: r.id, name: who, bank: typed }); continue; }
-    if (codes.length > 1) { ambiguous.push({ id: r.id, name: who, bank: typed }); continue; }
+    if (candidates.length === 0) { unmatched.push({ id: r.id, name: who, bank: typed }); continue; }
 
-    if (!dryRun) await db.from("buddy_profiles").update({ bank_code: codes[0] }).eq("id", r.id);
+    const { bank, tied } = narrow(typed, resolvedKey, candidates);
+    if (!bank) {
+      ambiguous.push({ id: r.id, name: who, bank: typed, candidates: tied.map((b) => b.name) });
+      continue;
+    }
+
+    if (!dryRun) await db.from("buddy_profiles").update({ bank_code: bank.code, bank_name: bank.name }).eq("id", r.id);
     matched++;
   }
 
