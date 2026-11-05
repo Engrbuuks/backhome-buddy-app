@@ -1,0 +1,466 @@
+/*
+Theme Name: Backhome Buddy
+Theme URI: https://backhomebuddy.ng
+Author: Backhome Buddy
+Description: The marketing site for Backhome Buddy. Reads the service catalogue, prices, states and vetting steps live from the app, so the website can never advertise something the app no longer sells. Requires the app address to be set in Appearance, Customize, Backhome Buddy.
+Version: 1.0.0
+Requires at least: 6.0
+Tested up to: 6.7
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: backhome-buddy
+Tags: business, one-column, custom-logo, custom-menu, translation-ready
+
+The design treats the pages as an evidence file rather than a brochure. What a
+diaspora client is buying is not an errand, which a relative would run for
+nothing. They are buying proof and recourse, so the hero is the artefact the
+app produces and green is reserved to mean verified, never decoration.
+*/
+
+:root {
+	--bhb-primary: #33cb2b;
+	--bhb-green: #079516;
+	--bhb-dark-green: #15803d;
+	--bhb-soft: #eafbe8;
+	--bhb-char: #1d1d1f;
+	--bhb-slate: #737375;
+	--bhb-border: #e6e7e8;
+	--bhb-bg: #f6f8f6;
+	--bhb-amber: #b45309;
+	--bhb-shadow: 0 10px 30px rgba(29, 29, 31, 0.06);
+	--bhb-shadow-lg: 0 18px 50px rgba(29, 29, 31, 0.12);
+	--bhb-wrap: 1180px;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+	margin: 0;
+	background: #fff;
+	color: var(--bhb-char);
+	font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+	font-size: 16px;
+	line-height: 1.6;
+	-webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; height: auto; }
+a { color: inherit; }
+
+.bhb-skip {
+	position: absolute;
+	left: -9999px;
+}
+.bhb-skip:focus {
+	left: 1rem;
+	top: 1rem;
+	z-index: 100;
+	background: #fff;
+	color: var(--bhb-char);
+	padding: 0.75rem 1rem;
+	border-radius: 12px;
+	box-shadow: var(--bhb-shadow);
+}
+
+:focus-visible {
+	outline: 3px solid var(--bhb-primary);
+	outline-offset: 2px;
+}
+
+.bhb-wrap {
+	max-width: var(--bhb-wrap);
+	margin: 0 auto;
+	padding: 0 1.5rem;
+}
+
+/* ---------- header ---------- */
+
+.bhb-header { background: #fff; border-bottom: 1px solid var(--bhb-border); }
+.bhb-header--dark { background: var(--bhb-char); border-bottom: 0; }
+
+.bhb-header__inner {
+	max-width: var(--bhb-wrap);
+	margin: 0 auto;
+	padding: 1rem 1.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+@media (min-width: 640px) {
+	.bhb-header__inner { padding: 1.25rem 1.5rem; gap: 1.5rem; }
+}
+
+/* shrink-0 equivalent: without it the flex row squeezes the wordmark and
+   clips it on a narrow screen. */
+.bhb-logo { flex: 0 0 auto; display: inline-flex; align-items: center; text-decoration: none; }
+.bhb-logo img,
+.bhb-logo .custom-logo {
+	display: block;
+	height: 28px;
+	width: auto;
+	max-width: 150px;
+	object-fit: contain;
+	object-position: left center;
+}
+@media (min-width: 640px) {
+	.bhb-logo img,
+	.bhb-logo .custom-logo { height: 32px; max-width: 190px; }
+}
+.bhb-logo__text { font-family: Sora, sans-serif; font-weight: 800; font-size: 1.05rem; }
+.bhb-header--dark .bhb-logo__text { color: #fff; }
+
+.bhb-nav { display: none; }
+@media (min-width: 880px) { .bhb-nav { display: block; } }
+
+.bhb-nav__list {
+	display: flex;
+	align-items: center;
+	gap: 1.75rem;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	font-size: 0.875rem;
+	font-weight: 600;
+}
+.bhb-nav__list a { color: var(--bhb-slate); text-decoration: none; }
+.bhb-nav__list a:hover { color: var(--bhb-char); }
+.bhb-header--dark .bhb-nav__list a { color: rgba(255, 255, 255, 0.8); }
+.bhb-header--dark .bhb-nav__list a:hover { color: #fff; }
+
+.bhb-header__cta { display: flex; align-items: center; gap: 0.5rem; }
+
+.bhb-link-quiet {
+	display: none;
+	padding: 0.625rem 1rem;
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--bhb-slate);
+	text-decoration: none;
+}
+@media (min-width: 640px) { .bhb-link-quiet { display: inline-block; } }
+.bhb-header--dark .bhb-link-quiet { color: rgba(255, 255, 255, 0.8); }
+
+.bhb-link-green {
+	display: inline-block;
+	margin-top: 2.75rem;
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--bhb-primary);
+	text-decoration: none;
+}
+.bhb-link-green:hover { color: #fff; }
+
+/* ---------- buttons ---------- */
+
+.bhb-btn {
+	display: inline-block;
+	border-radius: 12px;
+	padding: 0.625rem 1rem;
+	font-size: 0.875rem;
+	font-weight: 700;
+	text-decoration: none;
+	border: 1px solid transparent;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.bhb-btn--lg { padding: 0.875rem 1.5rem; }
+.bhb-btn--primary { background: var(--bhb-green); color: #fff; }
+.bhb-btn--primary:hover { background: var(--bhb-dark-green); }
+.bhb-btn--ghost { border-color: rgba(255, 255, 255, 0.2); color: #fff; }
+.bhb-btn--ghost:hover { border-color: rgba(255, 255, 255, 0.5); }
+.bhb-btn--outline { border-color: var(--bhb-border); color: var(--bhb-char); background: #fff; }
+.bhb-btn--outline:hover { border-color: var(--bhb-green); }
+
+/* ---------- hero ---------- */
+
+.bhb-hero { background: var(--bhb-char); }
+
+.bhb-hero__grid {
+	display: grid;
+	gap: 2.5rem;
+	padding-top: 2.5rem;
+	padding-bottom: 4rem;
+	align-items: center;
+}
+@media (min-width: 1024px) {
+	.bhb-hero__grid {
+		grid-template-columns: 1fr 1.15fr;
+		gap: 3.5rem;
+		padding-top: 4rem;
+		padding-bottom: 6rem;
+	}
+}
+
+/* On a phone the artefact comes first: it is the thing being bought, and it
+   should not sit two screens below the fold. */
+.bhb-hero__art { order: -1; }
+@media (min-width: 1024px) { .bhb-hero__art { order: 0; } }
+
+.bhb-hero__title {
+	margin: 0;
+	max-width: 16ch;
+	font-family: Sora, sans-serif;
+	font-weight: 800;
+	font-size: clamp(2.25rem, 1.4rem + 3.4vw, 3.5rem);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
+	color: #fff;
+}
+
+.bhb-hero__sub {
+	margin: 1.25rem 0 0;
+	max-width: 48ch;
+	font-size: 1.0625rem;
+	line-height: 1.75;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.bhb-hero__actions {
+	margin-top: 1.75rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+}
+
+.bhb-hero__meta {
+	margin: 1.5rem 0 0;
+	font-size: 0.875rem;
+	color: rgba(255, 255, 255, 0.45);
+}
+
+.bhb-hero__cap {
+	display: none;
+	margin: 0.75rem 0 0;
+	max-width: 52ch;
+	font-size: 0.875rem;
+	line-height: 1.6;
+	color: rgba(255, 255, 255, 0.45);
+}
+@media (min-width: 1024px) { .bhb-hero__cap { display: block; } }
+
+.bhb-frame { margin: 0; }
+.bhb-frame svg { display: block; width: 100%; height: auto; border-radius: 16px; box-shadow: var(--bhb-shadow-lg); }
+.bhb-frame-wrap { align-self: start; }
+
+/* ---------- sections ---------- */
+
+.bhb-section { padding: 4rem 0; }
+@media (min-width: 1024px) { .bhb-section { padding: 5rem 0; } }
+.bhb-section--head { padding-bottom: 2.5rem; }
+.bhb-section--tint { background: var(--bhb-bg); border-top: 1px solid var(--bhb-border); border-bottom: 1px solid var(--bhb-border); }
+.bhb-section--dark { background: var(--bhb-char); }
+.bhb-section--rule { padding-top: 0; }
+.bhb-section--rule .bhb-wrap > :first-child { border-top: 1px solid var(--bhb-border); padding-top: 2.5rem; }
+
+.bhb-h1 {
+	margin: 0;
+	max-width: 28ch;
+	font-family: Sora, sans-serif;
+	font-weight: 800;
+	font-size: clamp(2rem, 1.4rem + 2.2vw, 2.75rem);
+	line-height: 1.1;
+	letter-spacing: -0.02em;
+}
+
+.bhb-h2 {
+	margin: 0 0 1.25rem;
+	font-family: Sora, sans-serif;
+	font-weight: 800;
+	font-size: clamp(1.625rem, 1.2rem + 1.6vw, 2.25rem);
+	line-height: 1.15;
+	letter-spacing: -0.01em;
+}
+.bhb-h2--tight { max-width: 26ch; }
+.bhb-h2--invert { color: #fff; }
+
+.bhb-h3 {
+	margin: 0 0 0.75rem;
+	font-family: Sora, sans-serif;
+	font-weight: 800;
+	font-size: 1.5rem;
+	line-height: 1.25;
+	letter-spacing: -0.01em;
+}
+
+.bhb-lede {
+	margin: 0 0 1.25rem;
+	max-width: 66ch;
+	font-size: 1.0625rem;
+	line-height: 1.8;
+	color: var(--bhb-slate);
+}
+.bhb-lede--invert { color: rgba(255, 255, 255, 0.7); }
+
+.bhb-note { max-width: 64ch; margin: 0 0 1.25rem; font-size: 0.9375rem; line-height: 1.75; color: var(--bhb-slate); }
+.bhb-foot, .bhb-states { max-width: 68ch; margin: 1.75rem 0 0; font-size: 0.875rem; line-height: 1.75; color: var(--bhb-slate); }
+.bhb-empty { padding: 2.5rem; border: 1px dashed var(--bhb-border); border-radius: 20px; background: var(--bhb-bg); text-align: center; color: var(--bhb-slate); }
+
+.bhb-prose { max-width: 68ch; }
+.bhb-prose p { font-size: 1.0625rem; line-height: 1.8; color: var(--bhb-slate); margin: 0 0 1.25rem; }
+.bhb-prose strong { color: var(--bhb-char); }
+.bhb-prose h2, .bhb-prose h3 { font-family: Sora, sans-serif; font-weight: 800; letter-spacing: -0.01em; color: var(--bhb-char); }
+.bhb-prose a { color: var(--bhb-dark-green); }
+
+/* ---------- the proof anatomy ---------- */
+
+.bhb-anatomy { margin: 2.25rem 0 2.75rem; }
+.bhb-anatomy > div {
+	display: grid;
+	gap: 0.35rem;
+	padding: 1.25rem 0;
+	border-bottom: 1px solid var(--bhb-border);
+}
+.bhb-anatomy > div:first-child { border-top: 1px solid var(--bhb-border); }
+@media (min-width: 720px) {
+	.bhb-anatomy > div { grid-template-columns: minmax(0, 19rem) 1fr; gap: 2.5rem; }
+}
+.bhb-anatomy dt { font-family: Sora, sans-serif; font-weight: 800; font-size: 0.9375rem; line-height: 1.5; }
+.bhb-anatomy dd { margin: 0; max-width: 62ch; font-size: 0.9375rem; line-height: 1.75; color: var(--bhb-slate); }
+
+/* ---------- proof stamps ---------- */
+
+.bhb-proof {
+	display: grid;
+	gap: 1.75rem;
+	background: var(--bhb-bg);
+	border-radius: 24px;
+	padding: 1.5rem;
+}
+@media (min-width: 720px) {
+	.bhb-proof { grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem; }
+}
+.bhb-section--tint .bhb-proof { background: #fff; }
+
+.bhb-proof__item { margin: 0; }
+
+.bhb-strip {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+	background: #111113;
+	border-radius: 16px;
+	padding: 1rem 1.25rem;
+}
+.bhb-strip--ok { border-left: 5px solid var(--bhb-green); }
+.bhb-strip--warn { border-left: 5px solid var(--bhb-amber); }
+
+.bhb-strip__dot {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 800;
+	line-height: 1;
+}
+.bhb-strip--ok .bhb-strip__dot { background: var(--bhb-green); }
+.bhb-strip--warn .bhb-strip__dot { background: var(--bhb-amber); }
+
+.bhb-strip__title { margin: 0; color: #fff; font-family: Sora, sans-serif; font-size: 0.875rem; font-weight: 800; line-height: 1.4; }
+.bhb-strip__meta { margin: 0.15rem 0 0; color: rgba(255, 255, 255, 0.55); font-size: 0.75rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.bhb-proof__cap { max-width: 46ch; margin: 0.85rem 0 0; font-size: 0.875rem; line-height: 1.65; color: var(--bhb-slate); }
+
+/* ---------- the catalogue, as a list ---------- */
+
+.bhb-list { list-style: none; margin: 2.25rem 0 0; padding: 0; border-top: 1px solid var(--bhb-border); }
+
+.bhb-row { display: grid; gap: 0.75rem; padding: 1.75rem 0; border-bottom: 1px solid var(--bhb-border); }
+@media (min-width: 640px) { .bhb-row { grid-template-columns: 1fr auto; align-items: start; gap: 2.5rem; } }
+
+.bhb-row__name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.7rem;
+	margin: 0;
+	font-family: Sora, sans-serif;
+	font-size: 1.25rem;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+}
+.bhb-row__name a { text-decoration: none; }
+.bhb-row__desc { max-width: 68ch; margin: 0.625rem 0 0; font-size: 0.9375rem; line-height: 1.75; color: var(--bhb-slate); }
+.bhb-row__note { max-width: 68ch; margin: 0.625rem 0 0; font-size: 0.8125rem; line-height: 1.65; color: var(--bhb-dark-green); }
+.bhb-row__price { margin: 0; font-family: Sora, sans-serif; font-size: 1.25rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (min-width: 640px) { .bhb-row__price { text-align: right; } }
+
+.bhb-tag {
+	display: inline-block;
+	border-radius: 999px;
+	background: var(--bhb-soft);
+	color: var(--bhb-dark-green);
+	padding: 0.25rem 0.625rem;
+	font-family: Inter, sans-serif;
+	font-size: 0.6875rem;
+	font-weight: 800;
+}
+
+/* ---------- monthly ---------- */
+
+.bhb-split { display: grid; gap: 3rem; }
+@media (min-width: 1024px) { .bhb-split { grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; } }
+
+.bhb-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; }
+.bhb-card { border: 1px solid var(--bhb-border); border-radius: 16px; background: #fff; padding: 1.25rem; box-shadow: var(--bhb-shadow); }
+.bhb-card__title { margin: 0; font-family: Sora, sans-serif; font-size: 1rem; font-weight: 800; }
+.bhb-card__body { margin: 0.375rem 0 0; font-size: 0.875rem; line-height: 1.75; color: var(--bhb-slate); }
+
+/* ---------- vetting steps. Numbered because it is a real sequence. ---------- */
+
+.bhb-steps { list-style: none; margin: 2.75rem 0 0; padding: 0; display: grid; gap: 2.25rem; }
+@media (min-width: 720px) { .bhb-steps { grid-template-columns: 1fr 1fr; column-gap: 3rem; } }
+
+.bhb-steps-long { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--bhb-border); }
+.bhb-steps-long .bhb-step { padding: 2rem 0; border-bottom: 1px solid var(--bhb-border); }
+
+.bhb-step { display: flex; gap: 1.25rem; margin: 0; }
+.bhb-step__n { flex: 0 0 auto; min-width: 1.25rem; font-family: Sora, sans-serif; font-weight: 800; font-size: 0.875rem; line-height: 1.7; color: var(--bhb-primary); font-variant-numeric: tabular-nums; }
+.bhb-step__n--dark { color: var(--bhb-green); }
+.bhb-step__title { margin: 0; font-family: Sora, sans-serif; font-size: 0.9375rem; font-weight: 800; line-height: 1.5; }
+.bhb-step__title--lg { font-size: 1.125rem; line-height: 1.45; }
+.bhb-step__body { max-width: 52ch; margin: 0.4rem 0 0; font-size: 0.875rem; line-height: 1.75; color: var(--bhb-slate); }
+
+.bhb-steps--invert .bhb-step__title { color: #fff; }
+.bhb-steps--invert .bhb-step__body { color: rgba(255, 255, 255, 0.6); }
+
+.bhb-caveat { background: transparent; }
+.bhb-caveat .bhb-p { max-width: 68ch; font-size: 1.0625rem; line-height: 1.8; color: var(--bhb-slate); margin: 0 0 1.25rem; }
+.bhb-caveat .bhb-p strong { color: var(--bhb-char); }
+
+/* ---------- footer ---------- */
+
+.bhb-footer { border-top: 1px solid var(--bhb-border); background: #fff; padding: 3rem 0; }
+.bhb-footer__grid { display: grid; gap: 2.5rem; }
+@media (min-width: 720px) { .bhb-footer__grid { grid-template-columns: 1.4fr 1fr 1fr; } }
+
+.bhb-footer__blurb { max-width: 38ch; margin: 1rem 0 0; font-size: 0.875rem; line-height: 1.75; color: var(--bhb-slate); }
+.bhb-footer__states { margin: 1rem 0 0; font-size: 0.75rem; line-height: 1.7; color: var(--bhb-slate); }
+.bhb-footer__head { margin: 0; font-family: Sora, sans-serif; font-weight: 800; font-size: 0.9375rem; }
+.bhb-footer__list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.5rem; font-size: 0.875rem; }
+.bhb-footer__list a { color: var(--bhb-slate); text-decoration: none; }
+.bhb-footer__list a:hover { color: var(--bhb-char); }
+.bhb-footer__legal { margin: 2.5rem 0 0; padding-top: 1.5rem; border-top: 1px solid var(--bhb-border); font-size: 0.75rem; line-height: 1.7; color: var(--bhb-slate); }
+
+.bhb-pager { margin-top: 2rem; font-size: 0.875rem; }
+.bhb-pager a { color: var(--bhb-dark-green); }
+
+/* ---------- motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		transition-duration: 0.001ms !important;
+	}
+}
