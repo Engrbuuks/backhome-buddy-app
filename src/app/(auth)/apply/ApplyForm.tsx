@@ -227,7 +227,7 @@ export default function ApplyForm() {
           </div>
           <div className="space-y-2 rounded-2xl border border-bbb-border bg-bbb-bg p-4">
             <Check name="consent_background_checks" checked={checks.consent_background_checks} onChange={(x) => setChecks((c) => ({ ...c, consent_background_checks: x }))} label="I consent to background, identity, reference and guarantor checks, including a Police Character Certificate if shortlisted." />
-            <Check name="consent_data_processing" checked={checks.consent_data_processing} onChange={(x) => setChecks((c) => ({ ...c, consent_data_processing: x }))} label="I consent to Backhome Buddy processing the information I provide for vetting and operations, in line with its privacy policy." />
+            <Check name="consent_data_processing" checked={checks.consent_data_processing} onChange={(x) => setChecks((c) => ({ ...c, consent_data_processing: x }))} label={<>I consent to Backhome Buddy processing the information I provide for vetting and operations, in line with its <a href="https://backhomebuddy.ng/privacy-policy/" target="_blank" rel="noopener noreferrer" className="underline">privacy policy</a> and <a href="https://backhomebuddy.ng/terms-of-service/" target="_blank" rel="noopener noreferrer" className="underline">terms of service</a>.</>} />
             <Check name="declare_true" checked={checks.declare_true} onChange={(x) => setChecks((c) => ({ ...c, declare_true: x }))} label={<><span className="font-semibold">I declare that all information provided is true.</span> False information leads to permanent disqualification.</>} />
           </div>
         </div>

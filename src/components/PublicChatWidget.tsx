@@ -83,7 +83,14 @@ export function PublicChatWidget({ embedded = false }: { embedded?: boolean }) {
             <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submitIdentity()} placeholder="Email (optional, so we can follow up)" className="h-10 w-full rounded-xl border border-bbb-border px-3 text-[13px] outline-none focus:border-bbb-strong" />
             {idError && <p className="text-[11px] font-semibold text-red-600">{idError}</p>}
             <button onClick={submitIdentity} disabled={pending} className="h-10 rounded-xl bg-bbb-strong text-[13px] font-bold text-white hover:bg-bbb-dark disabled:opacity-50">{pending ? "…" : "Start chat"}</button>
-            <p className="text-center text-[10px] text-bbb-slate">We only use this to assist you. See our privacy policy.</p>
+            {/* Linked, not merely mentioned. A consent line pointing at a
+                policy the reader cannot open is not consent. */}
+            <p className="text-center text-[10px] text-bbb-slate">
+              We only use this to assist you. See our{" "}
+              <a href="https://backhomebuddy.ng/privacy-policy/" target="_blank" rel="noopener noreferrer" className="underline">
+                privacy policy
+              </a>.
+            </p>
           </div>
         ) : (
           <>
