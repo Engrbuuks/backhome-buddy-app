@@ -34,7 +34,7 @@ $bhb_dark = ! empty( $GLOBALS['bhb_dark_header'] );
 			?>
 		</a>
 
-		<nav class="bhb-nav" aria-label="<?php esc_attr_e( 'Primary', 'backhome-buddy' ); ?>">
+		<nav class="bhb-nav" aria-label="<?php esc_attr_e( 'Primary', 'bhb-marketing' ); ?>">
 			<?php
 			if ( has_nav_menu( 'primary' ) ) {
 				wp_nav_menu( array(

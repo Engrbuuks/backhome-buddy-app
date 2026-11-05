@@ -34,8 +34,8 @@ function bhb_setup() {
 	add_theme_support( 'responsive-embeds' );
 
 	register_nav_menus( array(
-		'primary' => __( 'Primary menu', 'backhome-buddy' ),
-		'footer'  => __( 'Footer menu', 'backhome-buddy' ),
+		'primary' => __( 'Primary menu', 'bhb-marketing' ),
+		'footer'  => __( 'Footer menu', 'bhb-marketing' ),
 	) );
 }
 add_action( 'after_setup_theme', 'bhb_setup' );
@@ -59,9 +59,9 @@ add_action( 'wp_enqueue_scripts', 'bhb_assets' );
 
 function bhb_customize( $wp_customize ) {
 	$wp_customize->add_section( 'bhb_settings', array(
-		'title'       => __( 'Backhome Buddy', 'backhome-buddy' ),
+		'title'       => __( 'Backhome Buddy', 'bhb-marketing' ),
 		'priority'    => 30,
-		'description' => __( 'The app address is what makes the service list and prices on this site stay correct.', 'backhome-buddy' ),
+		'description' => __( 'The app address is what makes the service list and prices on this site stay correct.', 'bhb-marketing' ),
 	) );
 
 	$fields = array(
