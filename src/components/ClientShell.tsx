@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Home, LifeBuoy, LogOut, Menu, PlusCircle, Settings, UsersRound } from "lucide-react";
+import { Bell, Home, LifeBuoy, LogOut, Menu, PlusCircle, Settings, UsersRound, RotateCcw } from "lucide-react";
 import { signOut } from "@/lib/auth/actions";
 
 import { NotificationBadge } from "@/components/NotificationBadge";
@@ -12,6 +12,7 @@ const NAV = [
   { label: "Dashboard", href: "/client/dashboard", icon: Home },
   { label: "New Request", href: "/client/requests/new", icon: PlusCircle },
   { label: "Recipients", href: "/client/recipients", icon: UsersRound },
+  { label: "Monthly", href: "/client/subscriptions", icon: RotateCcw },
   { label: "Notifications", href: "/client/notifications", icon: Bell },
   { label: "Support", href: "/client/support", icon: LifeBuoy },
   { label: "Settings", href: "/client/profile", icon: Settings },

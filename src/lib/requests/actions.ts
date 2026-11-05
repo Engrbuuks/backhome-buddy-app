@@ -15,7 +15,7 @@ import { getCurrentProfile } from "@/lib/auth/roles";
 export async function getRequestFormOptions() {
   const supabase = createClient();
   const [{ data: services }, { data: regions }, { data: upliftRow }, { data: urgentRow }] = await Promise.all([
-    supabase.from("service_types").select("id, name, base_price_ngn, pricing_mode, from_price_usd").eq("active", true).order("sort_order"),
+    supabase.from("service_types").select("id, name, description, base_price_ngn, pricing_mode, from_price_usd, requires_payee, payee_label, handles_cash").eq("active", true).order("sort_order"),
     supabase.from("regions").select("id, name, state, zone").eq("active", true).order("name"),
     supabase.from("app_settings").select("value").eq("key", "pricing_zone_b_uplift_pct").maybeSingle(),
     supabase.from("app_settings").select("value").eq("key", "pricing_urgent_surcharge_pct").maybeSingle(),
@@ -63,18 +63,170 @@ export async function createRequest(_prev: unknown, formData: FormData) {
   }).select("id, title, urgency").single();
   if (error) return { error: error.message };
 
-  if (data) {
-    const { notifyAdmins } = await import("@/lib/notifications/notify");
-    const urgent = data.urgency === "urgent";
+  if (!data) {
+    revalidatePath("/client/dashboard");
+    redirect("/client/dashboard");
+  }
+
+  // THE FIXED PRICE PATH.
+  //
+  // If the service carries a published price, work it out here and send the
+  // client straight to payment. Nobody writes a quote, nobody waits for one,
+  // and the figure they were shown on the form is the figure they are charged,
+  // because the form and this code call the same function.
+  //
+  // Everything else keeps the original behaviour exactly: status stays
+  // "submitted" and an admin prices it by hand.
+  const priced = await priceOnSubmit({
+    requestId: data.id,
+    serviceTypeId: (formData.get("service_type_id") as string) || null,
+    regionId: isOtherState ? null : regionRaw || null,
+    urgent: data.urgency === "urgent",
+    vendorAmountNgn: Number(formData.get("vendor_amount_ngn") || 0),
+    payeeName: String(formData.get("payee_name") || "").slice(0, 160).trim(),
+    payeeDetail: String(formData.get("payee_detail") || "").slice(0, 400).trim(),
+  });
+
+  const { notifyAdmins } = await import("@/lib/notifications/notify");
+  const urgent = data.urgency === "urgent";
+  if (priced.ok) {
+    await notifyAdmins(
+      "Request priced automatically — awaiting payment",
+      `"${data.title}" was priced at the published rate. Nothing to quote; it is waiting on the client's transfer.`,
+      `/admin/requests/${data.id}`,
+    );
+  } else {
     await notifyAdmins(
       urgent ? "🔴 URGENT request — quote within 6 hours" : "New request submitted",
       `"${data.title}"${isOtherState ? ` — OUT OF COVERAGE (${requestedState})` : ""} — review and quote.`,
-      `/admin/requests/${data.id}`
+      `/admin/requests/${data.id}`,
     );
   }
 
   revalidatePath("/client/dashboard");
-  redirect("/client/dashboard");
+  // A priced request goes to its own page, where the amount and the transfer
+  // details already are. Sending somebody to the dashboard at the one moment
+  // they are ready to pay is the wrong place.
+  redirect(priced.ok ? `/client/requests/${data.id}` : "/client/dashboard");
+}
+
+/**
+ * Price a request at the published rate and move it to awaiting payment.
+ *
+ * Returns ok:false for anything that should still be quoted by a human, and
+ * never throws: a pricing failure must leave a perfectly good request sitting
+ * in the admin queue rather than losing it.
+ *
+ * Not exported. It takes a request id and writes money onto it, so it must not
+ * be reachable as an endpoint.
+ */
+async function priceOnSubmit(a: {
+  requestId: string;
+  serviceTypeId: string | null;
+  regionId: string | null;
+  urgent: boolean;
+  vendorAmountNgn: number;
+  payeeName: string;
+  payeeDetail: string;
+}): Promise<{ ok: boolean }> {
+  try {
+    if (!a.serviceTypeId) return { ok: false };
+
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const { computeInstantPrice, isInstantlyPayable, usdToNgn, withVendorAmount } =
+      await import("@/lib/money/instant-price");
+    const { getUsdRate, getRates } = await import("@/lib/money/fx");
+    const db = createAdminClient();
+
+    const { data: svc } = await db
+      .from("service_types")
+      .select("id, name, pricing_mode, from_price_usd, requires_payee")
+      .eq("id", a.serviceTypeId)
+      .maybeSingle();
+    if (!svc || !isInstantlyPayable((svc as any).pricing_mode, (svc as any).from_price_usd)) {
+      return { ok: false };
+    }
+
+    // A purpose bound payment with no payee is not payable yet: we would be
+    // collecting a bill without knowing who to pay. Let a human sort it out.
+    if ((svc as any).requires_payee && (!a.payeeName || a.vendorAmountNgn <= 0)) {
+      return { ok: false };
+    }
+
+    const [{ data: region }, { data: upliftRow }, { data: urgentRow }] = await Promise.all([
+      a.regionId ? db.from("regions").select("zone").eq("id", a.regionId).maybeSingle() : Promise.resolve({ data: null } as any),
+      db.from("app_settings").select("value").eq("key", "pricing_zone_b_uplift_pct").maybeSingle(),
+      db.from("app_settings").select("value").eq("key", "pricing_urgent_surcharge_pct").maybeSingle(),
+    ]);
+
+    const usdRate = await getUsdRate();
+    if (!usdRate || usdRate <= 0) return { ok: false };
+
+    let price = computeInstantPrice({
+      fromPriceUsd: Number((svc as any).from_price_usd),
+      zone: ((region as any)?.zone ?? null) as any,
+      zoneBUpliftPct: Number((upliftRow?.value as any)?.pct ?? 25),
+      urgent: a.urgent,
+      urgentSurchargePct: Number((urgentRow?.value as any)?.pct ?? 40),
+    });
+    if (price.totalUsd <= 0) return { ok: false };
+
+    const vendorNgn = Math.max(0, Math.round(Number(a.vendorAmountNgn) || 0));
+    if (vendorNgn > 0) {
+      price = withVendorAmount(price, vendorNgn, usdRate, `Paid on your behalf to ${a.payeeName}`);
+    }
+
+    const totalNgn = usdToNgn(price.totalUsd, usdRate);
+    if (totalNgn <= 0) return { ok: false };
+
+    // The breakdown, so the client sees what they are paying for rather than
+    // one number. item_type matters: a purchase is money passing through to a
+    // third party and must never be counted as revenue.
+    const items = price.lines.map((l) => ({
+      request_id: a.requestId,
+      label: l.label,
+      amount_ngn: usdToNgn(l.amountUsd, usdRate),
+      item_type: l.itemType,
+    }));
+    if (items.length) await db.from("quote_items").insert(items);
+
+    const serviceRevenue = items
+      .filter((i) => i.item_type === "service")
+      .reduce((sum, i) => sum + Number(i.amount_ngn || 0), 0);
+
+    // Freeze the rates, same as a human written quote does: the client was
+    // shown a figure in their own currency and it must not move with the
+    // market before they transfer.
+    const lockedRates = await getRates().catch(() => null);
+
+    const { error: upErr } = await db.from("requests").update({
+      client_price_ngn: totalNgn,
+      service_revenue_ngn: serviceRevenue,
+      vendor_amount_ngn: vendorNgn || null,
+      payee_name: a.payeeName || null,
+      payee_detail: a.payeeDetail || null,
+      fx_rate: usdRate,
+      fx_rates_snapshot: lockedRates,
+      priced_automatically: true,
+      status: "awaiting_pay",
+      updated_at: new Date().toISOString(),
+    }).eq("id", a.requestId).eq("status", "submitted");
+    if (upErr) return { ok: false };
+
+    await db.from("request_timeline").insert({
+      request_id: a.requestId,
+      from_status: "submitted",
+      to_status: "awaiting_pay",
+      actor_id: null,
+      note: `Priced automatically at the published rate — ₦${totalNgn.toLocaleString("en-NG")}`,
+    });
+
+    return { ok: true };
+  } catch {
+    // Silence here is deliberate: the request already exists and is safe in the
+    // admin queue. A pricing bug must not cost somebody their submission.
+    return { ok: false };
+  }
 }
 
 // Client's own requests (RLS auto-filters to theirs).

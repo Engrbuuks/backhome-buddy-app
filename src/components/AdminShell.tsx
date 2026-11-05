@@ -48,6 +48,7 @@ const NAV_GROUPS: { title: string | null; items: { href: string; label: string; 
     title: "Money",
     items: [
       { href: "/admin/payouts", label: "Payouts Queue", icon: Wallet },
+      { href: "/admin/subscriptions", label: "Monthly Retainers", icon: RotateCcw },
       { href: "/admin/refunds", label: "Refunds & Held Funds", icon: RotateCcw },
       { href: "/admin/accounting", label: "Accounting", icon: Wallet },
       { href: "/admin/ledger", label: "Ledger", icon: Receipt },

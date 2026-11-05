@@ -24,7 +24,7 @@ export default async function AdminDashboard() {
   // Things that are switched off and say nothing about it. Each one looks like
   // a working feature from the inside until somebody notices it never fired.
   const OFF: { on: boolean | undefined; label: string; effect: string }[] = [
-    { on: health?.cron, label: "Scheduled jobs", effect: "CRON_SECRET is not set, so both scheduled jobs are rejected on every run. Tasks never auto-confirm and offers never expire." },
+    { on: health?.cron, label: "Scheduled jobs", effect: "CRON_SECRET is not set, so all three scheduled jobs are rejected on every run. Tasks never auto-confirm, offers never expire, and monthly retainers are never raised." },
     { on: health?.storage, label: "File storage", effect: "R2 is not configured, so buddies cannot upload proof at all." },
     { on: health?.email, label: "Email", effect: "RESEND_API_KEY is not set. Clients and buddies get in-app notifications only, no email." },
     { on: health?.bankCheck, label: "Bank account check", effect: "PAYSTACK_SECRET_KEY is not set, so payout accounts are never verified automatically." },

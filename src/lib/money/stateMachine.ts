@@ -8,7 +8,10 @@ import type { RequestStatus } from "@/types/db";
  */
 export const ALLOWED_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
   draft: ["submitted", "cancelled"],
-  submitted: ["quoted", "cancelled"],
+  // awaiting_pay direct from submitted is the fixed price path: the service
+  // has a published price, the server computes it on submit, and no human ever
+  // writes a quote. "quoted" remains for everything priced per task.
+  submitted: ["quoted", "awaiting_pay", "cancelled"],
   quoted: ["awaiting_pay", "quoted", "cancelled"], // re-quote allowed during negotiation
   awaiting_pay: ["paid", "quoted"], // back to quoted if payment fails
   paid: ["assigned", "cancelled", "refunded", "disputed"],
