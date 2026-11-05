@@ -9,3 +9,4 @@ bhb-skeleton/
 
 # Build artifact — should not be tracked.
 tsconfig.tsbuildinfo
+wordpress/*.zip

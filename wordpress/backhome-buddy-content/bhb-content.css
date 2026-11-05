@@ -1,0 +1,251 @@
+/**
+ * Backhome Buddy content blocks.
+ *
+ * Scoped under .bhb- so nothing here can leak into the rest of the theme, and
+ * nothing in the theme needs changing to use it. Inherits the theme's font on
+ * purpose: these blocks should look like part of the site they sit in, not
+ * like a widget bolted on.
+ */
+
+.bhb-block {
+	--bhb-green: #079516;
+	--bhb-dark: #1d1d1f;
+	--bhb-slate: #737375;
+	--bhb-border: #e6e7e8;
+	--bhb-soft: #eafbe8;
+	--bhb-amber: #b45309;
+	max-width: 1100px;
+	margin: 0 auto 2.5rem;
+	color: var(--bhb-dark);
+}
+
+.bhb-h2 {
+	font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.125rem);
+	font-weight: 800;
+	line-height: 1.15;
+	letter-spacing: -0.01em;
+	margin: 0 0 1.25rem;
+}
+
+.bhb-p {
+	max-width: 68ch;
+	font-size: 1.0625rem;
+	line-height: 1.75;
+	color: var(--bhb-slate);
+	margin: 0 0 1.1rem;
+}
+
+.bhb-p strong { color: var(--bhb-dark); }
+
+/* ---- the catalogue, as a list ---- */
+
+.bhb-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border-top: 1px solid var(--bhb-border);
+}
+
+.bhb-row {
+	display: grid;
+	gap: 0.75rem;
+	padding: 1.6rem 0;
+	border-bottom: 1px solid var(--bhb-border);
+}
+
+@media (min-width: 640px) {
+	.bhb-row {
+		grid-template-columns: 1fr auto;
+		align-items: start;
+		gap: 2.5rem;
+	}
+}
+
+.bhb-row__name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.7rem;
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+}
+
+.bhb-row__desc {
+	max-width: 68ch;
+	margin: 0.6rem 0 0;
+	font-size: 0.9375rem;
+	line-height: 1.7;
+	color: var(--bhb-slate);
+}
+
+.bhb-row__note {
+	max-width: 68ch;
+	margin: 0.6rem 0 0;
+	font-size: 0.8125rem;
+	line-height: 1.6;
+	color: #15803d;
+}
+
+.bhb-row__price {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+	.bhb-row__price { text-align: right; }
+}
+
+.bhb-tag {
+	display: inline-block;
+	border-radius: 999px;
+	background: var(--bhb-soft);
+	color: #15803d;
+	padding: 0.25rem 0.6rem;
+	font-size: 0.6875rem;
+	font-weight: 800;
+	letter-spacing: 0.01em;
+}
+
+.bhb-foot,
+.bhb-states {
+	max-width: 68ch;
+	margin: 1.5rem 0 0;
+	font-size: 0.875rem;
+	line-height: 1.7;
+	color: var(--bhb-slate);
+}
+
+/* ---- vetting, a real sequence so it is numbered ---- */
+
+.bhb-steps {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 1.9rem;
+}
+
+@media (min-width: 720px) {
+	.bhb-steps {
+		grid-template-columns: 1fr 1fr;
+		column-gap: 3rem;
+	}
+}
+
+.bhb-step {
+	display: flex;
+	gap: 1.1rem;
+	margin: 0;
+}
+
+.bhb-step__n {
+	flex: 0 0 auto;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+	color: var(--bhb-green);
+	line-height: 1.6;
+	font-size: 0.875rem;
+}
+
+.bhb-step__title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 800;
+	line-height: 1.5;
+}
+
+.bhb-step__body {
+	max-width: 48ch;
+	margin: 0.4rem 0 0;
+	font-size: 0.9375rem;
+	line-height: 1.75;
+	color: var(--bhb-slate);
+}
+
+.bhb-caveat {
+	background: #f6f8f6;
+	border-radius: 24px;
+	padding: 2rem;
+}
+
+@media (min-width: 720px) {
+	.bhb-caveat { padding: 2.75rem; }
+}
+
+/* ---- the two proof stamps ---- */
+
+.bhb-proof {
+	display: grid;
+	gap: 1.75rem;
+	background: #f6f8f6;
+	border-radius: 24px;
+	padding: 1.75rem;
+}
+
+@media (min-width: 720px) {
+	.bhb-proof {
+		grid-template-columns: 1fr 1fr;
+		gap: 2rem;
+		padding: 2.25rem;
+	}
+}
+
+.bhb-proof__item { margin: 0; }
+
+.bhb-strip {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+	background: #111113;
+	border-radius: 16px;
+	padding: 1rem 1.25rem;
+}
+
+.bhb-strip--ok { border-left: 5px solid var(--bhb-green); }
+.bhb-strip--warn { border-left: 5px solid var(--bhb-amber); }
+
+.bhb-strip__dot {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	color: #fff;
+	font-size: 0.75rem;
+	font-weight: 800;
+	line-height: 1;
+}
+
+.bhb-strip__dot--ok { background: var(--bhb-green); }
+.bhb-strip__dot--warn { background: var(--bhb-amber); }
+
+.bhb-strip__title {
+	margin: 0;
+	color: #fff;
+	font-size: 0.875rem;
+	font-weight: 800;
+	line-height: 1.4;
+}
+
+.bhb-strip__meta {
+	margin: 0.15rem 0 0;
+	color: rgba(255, 255, 255, 0.55);
+	font-size: 0.75rem;
+	line-height: 1.5;
+	font-variant-numeric: tabular-nums;
+}
+
+.bhb-proof__cap {
+	max-width: 46ch;
+	margin: 0.85rem 0 0;
+	font-size: 0.875rem;
+	line-height: 1.65;
+	color: var(--bhb-slate);
+}
